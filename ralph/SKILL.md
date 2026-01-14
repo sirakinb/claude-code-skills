@@ -9,6 +9,212 @@ Interactive feature planning that creates ralph-ready tasks in prd.json format.
 
 ---
 
+## FIRST: Ensure Ralph Files Exist
+
+Before doing anything else, check if the ralph execution files exist. If not, create them.
+
+### Check for files:
+
+```bash
+ls scripts/ralph/ralph.sh scripts/ralph/prompt.md 2>/dev/null
+```
+
+### If files don't exist, create them:
+
+```bash
+mkdir -p scripts/ralph
+```
+
+**Create `scripts/ralph/ralph.sh`:**
+
+```bash
+cat > scripts/ralph/ralph.sh << 'RALPH_SCRIPT'
+#!/bin/bash
+# Ralph - Long-running AI agent loop
+# Usage: ./ralph.sh [max_iterations]
+
+set -e
+
+MAX_ITERATIONS=${1:-10}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PRD_FILE="$SCRIPT_DIR/prd.json"
+PROGRESS_FILE="$SCRIPT_DIR/progress.txt"
+ARCHIVE_DIR="$SCRIPT_DIR/archive"
+LAST_BRANCH_FILE="$SCRIPT_DIR/.last-branch"
+
+# Archive previous run if branch changed
+if [ -f "$PRD_FILE" ] && [ -f "$LAST_BRANCH_FILE" ]; then
+  CURRENT_BRANCH=$(jq -r '.branchName // empty' "$PRD_FILE" 2>/dev/null || echo "")
+  LAST_BRANCH=$(cat "$LAST_BRANCH_FILE" 2>/dev/null || echo "")
+
+  if [ -n "$CURRENT_BRANCH" ] && [ -n "$LAST_BRANCH" ] && [ "$CURRENT_BRANCH" != "$LAST_BRANCH" ]; then
+    DATE=$(date +%Y-%m-%d)
+    FOLDER_NAME=$(echo "$LAST_BRANCH" | sed 's|^ralph/||')
+    ARCHIVE_FOLDER="$ARCHIVE_DIR/$DATE-$FOLDER_NAME"
+
+    echo "Archiving previous run: $LAST_BRANCH"
+    mkdir -p "$ARCHIVE_FOLDER"
+    [ -f "$PRD_FILE" ] && cp "$PRD_FILE" "$ARCHIVE_FOLDER/"
+    [ -f "$PROGRESS_FILE" ] && cp "$PROGRESS_FILE" "$ARCHIVE_FOLDER/"
+    echo "   Archived to: $ARCHIVE_FOLDER"
+
+    echo "# Ralph Progress Log" > "$PROGRESS_FILE"
+    echo "Started: $(date)" >> "$PROGRESS_FILE"
+    echo "---" >> "$PROGRESS_FILE"
+  fi
+fi
+
+# Track current branch
+if [ -f "$PRD_FILE" ]; then
+  CURRENT_BRANCH=$(jq -r '.branchName // empty' "$PRD_FILE" 2>/dev/null || echo "")
+  if [ -n "$CURRENT_BRANCH" ]; then
+    echo "$CURRENT_BRANCH" > "$LAST_BRANCH_FILE"
+  fi
+fi
+
+# Initialize progress file if it doesn't exist
+if [ ! -f "$PROGRESS_FILE" ]; then
+  echo "# Ralph Progress Log" > "$PROGRESS_FILE"
+  echo "Started: $(date)" >> "$PROGRESS_FILE"
+  echo "---" >> "$PROGRESS_FILE"
+fi
+
+echo "Starting Ralph - Max iterations: $MAX_ITERATIONS"
+
+for i in $(seq 1 $MAX_ITERATIONS); do
+  echo ""
+  echo "═══════════════════════════════════════════════════════"
+  echo "  Ralph Iteration $i of $MAX_ITERATIONS"
+  echo "═══════════════════════════════════════════════════════"
+
+  OUTPUT=$(cat "$SCRIPT_DIR/prompt.md" | claude --dangerously-skip-permissions 2>&1 | tee /dev/stderr) || true
+
+  if echo "$OUTPUT" | grep -q "<promise>COMPLETE</promise>"; then
+    echo ""
+    echo "Ralph completed all tasks!"
+    echo "Completed at iteration $i of $MAX_ITERATIONS"
+    exit 0
+  fi
+
+  echo "Iteration $i complete. Continuing..."
+  sleep 2
+done
+
+echo ""
+echo "Ralph reached max iterations ($MAX_ITERATIONS) without completing all tasks."
+echo "Check $PROGRESS_FILE for status."
+exit 1
+RALPH_SCRIPT
+
+chmod +x scripts/ralph/ralph.sh
+```
+
+**Create `scripts/ralph/prompt.md`:**
+
+```bash
+cat > scripts/ralph/prompt.md << 'RALPH_PROMPT'
+# Ralph Agent Instructions
+
+You are an autonomous coding agent working on a software project.
+
+## Your Task
+
+1. Read the PRD at `prd.json` (in the same directory as this file)
+2. Read the progress log at `progress.txt` (check Codebase Patterns section first)
+3. Check you're on the correct branch from PRD `branchName`. If not, check it out or create from main.
+4. Pick the **highest priority** user story where `passes: false`
+5. Implement that single user story
+6. Run quality checks (e.g., typecheck, lint, test - use whatever your project requires)
+7. Update AGENTS.md files if you discover reusable patterns (see below)
+8. If checks pass, commit ALL changes with message: `feat: [Story ID] - [Story Title]`
+9. Update the PRD to set `passes: true` for the completed story
+10. Append your progress to `progress.txt`
+
+## Progress Report Format
+
+APPEND to progress.txt (never replace, always append):
+```
+## [Date/Time] - [Story ID]
+Session: [current session reference]
+- What was implemented
+- Files changed
+- **Learnings for future iterations:**
+  - Patterns discovered (e.g., "this codebase uses X for Y")
+  - Gotchas encountered (e.g., "don't forget to update Z when changing W")
+  - Useful context (e.g., "the evaluation panel is in component X")
+---
+```
+
+The learnings section is critical - it helps future iterations avoid repeating mistakes.
+
+## Consolidate Patterns
+
+If you discover a **reusable pattern**, add it to the `## Codebase Patterns` section at the TOP of progress.txt:
+
+```
+## Codebase Patterns
+- Example: Use `sql<number>` template for aggregations
+- Example: Always use `IF NOT EXISTS` for migrations
+```
+
+Only add patterns that are **general and reusable**, not story-specific details.
+
+## Update AGENTS.md Files
+
+Before committing, check if edited files have learnings worth preserving in nearby AGENTS.md files:
+
+1. Identify directories with edited files
+2. Check for existing AGENTS.md in those directories
+3. Add valuable learnings future developers/agents should know
+
+**Good AGENTS.md additions:**
+- "When modifying X, also update Y to keep them in sync"
+- "This module uses pattern Z for all API calls"
+
+**Do NOT add:** Story-specific details, temporary notes, info already in progress.txt
+
+## Quality Requirements
+
+- ALL commits must pass quality checks (typecheck, lint, test)
+- Do NOT commit broken code
+- Keep changes focused and minimal
+- Follow existing code patterns
+
+## Browser Testing (Required for Frontend Stories)
+
+For any story that changes UI:
+1. Load the `dev-browser` skill
+2. Navigate to the relevant page
+3. Verify the UI changes work as expected
+
+A frontend story is NOT complete until browser verification passes.
+
+## Stop Condition
+
+After completing a user story, check if ALL stories have `passes: true`.
+
+If ALL stories are complete, reply with:
+<promise>COMPLETE</promise>
+
+If there are still stories with `passes: false`, end normally (another iteration will continue).
+
+## Important
+
+- Work on ONE story per iteration
+- Commit frequently
+- Keep CI green
+- Read Codebase Patterns in progress.txt before starting
+RALPH_PROMPT
+```
+
+**Confirm files were created:**
+
+```bash
+ls -la scripts/ralph/
+```
+
+---
+
 ## The Job
 
 **Three modes:**
@@ -17,18 +223,18 @@ Interactive feature planning that creates ralph-ready tasks in prd.json format.
 1. Chat through the feature - Ask clarifying questions
 2. Break into small user stories - Each completable in one iteration
 3. Create prd.json - Stories with `passes: false`
-4. Set up ralph files - Reset progress.txt
+4. Initialize progress.txt
 
 ### Mode 2: Existing Tasks
 1. Verify prd.json exists and is valid
 2. Show current status - Which stories pass/fail
-3. Set up ralph files if needed
+3. Set up progress.txt if needed
 
 ### Mode 3: Full Product Build (Multiple Features)
 1. Chat through the product - Ask about features, scope, requirements
 2. Break ALL features into small user stories - Same sizing rules as Mode 1
 3. Create prd.json with all stories - Ordered by dependency (schema → backend → UI)
-4. Set up ralph files - Same as Mode 1
+4. Initialize progress.txt
 5. Ralph works through all stories until entire product is complete
 
 **Ask the user which mode they need:**
@@ -114,7 +320,7 @@ Feature 3 stories (priority 9-12) - can depend on Features 1 & 2
 
 ## Step 4: Create prd.json
 
-### Output Format:
+Save to `scripts/ralph/prd.json`:
 
 ```json
 {
@@ -139,55 +345,14 @@ Feature 3 stories (priority 9-12) - can depend on Features 1 & 2
 }
 ```
 
-### Story description format:
-
-Write descriptions that a future Ralph iteration can pick up without context:
-
-```
-As a developer, I need to store task status in the database.
-
-**What to do:**
-- Add status column to tasks table
-- Create migration with default value 'pending'
-- Update schema types
-
-**Files:**
-- db/schema.ts
-- db/migrations/
-
-**Notes:**
-- Follow existing migration pattern
-```
-
 ---
 
-## Step 5: Set Up Ralph Files
+## Step 5: Initialize progress.txt
 
-After creating prd.json:
-
-### 1. Check if previous run needs archiving:
+Create `scripts/ralph/progress.txt`:
 
 ```bash
-cat prd.json 2>/dev/null | jq -r '.branchName'
-```
-
-If prd.json exists with a DIFFERENT branchName and progress.txt has content:
-```bash
-DATE=$(date +%Y-%m-%d)
-FEATURE="previous-feature-name"
-mkdir -p archive/$DATE-$FEATURE
-cp prd.json archive/$DATE-$FEATURE/
-cp progress.txt archive/$DATE-$FEATURE/
-```
-
-### 2. Write prd.json:
-
-Save the new prd.json to the ralph directory (or project root).
-
-### 3. Reset progress.txt:
-
-```bash
-cat > progress.txt << 'EOF'
+cat > scripts/ralph/progress.txt << 'EOF'
 # Ralph Progress Log
 Started: [current date]
 Feature: [feature/product name]
@@ -203,8 +368,6 @@ EOF
 
 ## Step 6: Confirm Setup
 
-### For Mode 1 (Single Feature):
-
 ```
 ✅ Ralph is ready!
 
@@ -214,41 +377,18 @@ EOF
 **User Stories:**
 1. US-001: [title] - priority 1
 2. US-002: [title] - priority 2
-3. US-003: [title] - priority 3
 ...
 
+**Files created:**
+- scripts/ralph/ralph.sh (execution loop)
+- scripts/ralph/prompt.md (agent instructions)
+- scripts/ralph/prd.json (your stories)
+- scripts/ralph/progress.txt (iteration memory)
+
 **To run Ralph:**
-./ralph.sh [max_iterations]
+./scripts/ralph/ralph.sh [max_iterations]
 
 Ralph will work through each story in priority order until all pass.
-```
-
-### For Mode 3 (Full Product):
-
-```
-✅ Product plan created!
-
-**Product:** [name]
-**Branch:** ralph/[product-name]
-
-**Stories by feature:**
-
-Feature 1: [name]
-- US-001: [title] - priority 1
-- US-002: [title] - priority 2
-
-Feature 2: [name]
-- US-003: [title] - priority 3
-- US-004: [title] - priority 4
-
-...
-
-**Total:** [N] stories across [X] features
-
-**To run Ralph:**
-./ralph.sh [max_iterations]
-
-Ralph will work through ALL stories until the entire product is complete.
 ```
 
 ---
@@ -257,10 +397,10 @@ Ralph will work through ALL stories until the entire product is complete.
 
 If the user already has prd.json:
 
-### 1. Verify prd.json exists and is valid:
+### 1. Verify prd.json exists:
 
 ```bash
-cat prd.json | jq '.userStories | length'
+cat scripts/ralph/prd.json | jq '.userStories | length'
 ```
 
 ### 2. Show current status:
@@ -274,16 +414,7 @@ cat prd.json | jq '.userStories | length'
 US-XXX: [title]
 
 **To run Ralph:**
-./ralph.sh [max_iterations]
-```
-
-### 3. Fix issues if needed:
-
-If stories are missing acceptance criteria or are too big, offer to fix:
-```
-Some stories might need adjustment:
-- US-003 looks too big - want me to split it?
-- US-005 is missing "Typecheck passes" criterion - want me to add it?
+./scripts/ralph/ralph.sh [max_iterations]
 ```
 
 ---
@@ -295,23 +426,16 @@ Each story MUST include verifiable acceptance criteria:
 ### Good criteria (verifiable):
 - "Add `status` column to tasks table with default 'pending'"
 - "Filter dropdown has options: All, Active, Completed"
-- "Clicking delete shows confirmation dialog"
 - "Typecheck passes"
 - "Tests pass"
 
 ### Bad criteria (vague):
 - ❌ "Works correctly"
 - ❌ "Good UX"
-- ❌ "Handles edge cases"
 
 ### Always include as final criterion:
 ```
 "Typecheck passes"
-```
-
-### For stories with testable logic:
-```
-"Tests pass"
 ```
 
 ### For UI stories:
@@ -325,31 +449,35 @@ Each story MUST include verifiable acceptance criteria:
 
 **User:** set up ralph for adding a priority field to tasks
 
-**Assistant:** What feature are you building?
+**Assistant:**
 
-**User:** I want to add priority levels (low, medium, high) to tasks so users can sort and filter by importance.
+First, let me ensure the ralph files exist...
+[Creates ralph.sh and prompt.md if needed]
 
-**Assistant:** Got it - task priority feature. A few questions:
+What feature are you building?
 
-1. Should priority be required or optional (with a default)?
-2. Where should the priority selector appear - task creation, edit, or both?
-3. Should the task list auto-sort by priority?
+**User:** I want to add priority levels (low, medium, high) to tasks.
 
-**User:** Optional with default "medium". Show in both create and edit. Yes, sort by priority then by date.
+**Assistant:** Got it. A few questions:
+1. Should priority be required or optional?
+2. Where should the selector appear?
+3. Should the list auto-sort by priority?
 
-**Assistant:** Here's my proposed breakdown:
+**User:** Optional with default "medium". Both create and edit. Yes, sort by priority.
 
-1. **US-001: Add priority column** - Schema change with migration
-2. **US-002: Display priority badge** - Visual indicator on task cards
-3. **US-003: Add priority selector** - Dropdown in create/edit forms
-4. **US-004: Sort by priority** - Update list query and UI
-5. **US-005: Filter by priority** - Add filter dropdown
+**Assistant:** Here's my breakdown:
+
+1. **US-001: Add priority column** - Schema change
+2. **US-002: Display priority badge** - Visual indicator
+3. **US-003: Add priority selector** - Dropdown in forms
+4. **US-004: Sort by priority** - Update query
+5. **US-005: Filter by priority** - Add filter
 
 Does this look right?
 
-**User:** Looks good, create the tasks
+**User:** Yes, create it
 
-**Assistant:** [Creates prd.json, resets progress.txt]
+**Assistant:** [Creates prd.json, progress.txt]
 
 ✅ Ralph is ready!
 ...
@@ -358,56 +486,61 @@ Does this look right?
 
 ## Example: Mode 3 Conversation
 
-**User:** I want to build a simple habit tracker app
+**User:** I want to build a habit tracker app
 
-**Assistant:** Tell me about the habit tracker:
+**Assistant:**
+
+First, let me ensure the ralph files exist...
+[Creates ralph.sh and prompt.md if needed]
+
+Tell me about the habit tracker:
 - What's the core goal?
 - What features do you want?
 - Any technical constraints?
 
-**User:** Users can create habits, mark them complete daily, and see streaks. Web app, React + Node.
+**User:** Users create habits, mark them complete daily, see streaks. React + Node.
 
-**Assistant:** Got it. Let me understand the scope:
+**Assistant:** Let me understand the scope:
 
-1. **Habits CRUD** - create, edit, delete habits
-2. **Daily tracking** - mark habits complete for today
-3. **Streaks** - show current streak and best streak
-4. **Dashboard** - overview of today's habits and progress
+1. **Habits CRUD** - create, edit, delete
+2. **Daily tracking** - mark complete
+3. **Streaks** - current and best
+4. **Dashboard** - overview
 
-Anything else? Authentication? Multiple users?
+Anything else? Auth?
 
-**User:** No auth for MVP, just local. Maybe a simple stats page showing completion rate.
+**User:** No auth for MVP. Maybe a stats page.
 
 **Assistant:** Here's the full breakdown:
 
-**Feature 1: Database & Schema (4 stories)**
-- US-001: Set up database with habits table
-- US-002: Add completions table (habit_id, date)
-- US-003: Add streak calculation logic
-- US-004: Add stats calculation helpers
+**Feature 1: Database (4 stories)**
+- US-001: habits table
+- US-002: completions table
+- US-003: streak calculation
+- US-004: stats helpers
 
-**Feature 2: Backend API (4 stories)**
-- US-005: Habits CRUD endpoints
-- US-006: Mark habit complete endpoint
-- US-007: Get today's habits with status
-- US-008: Get stats endpoint
+**Feature 2: API (4 stories)**
+- US-005: CRUD endpoints
+- US-006: mark complete
+- US-007: get today's habits
+- US-008: get stats
 
-**Feature 3: Core UI (4 stories)**
-- US-009: Habit list component
-- US-010: Add/edit habit modal
-- US-011: Daily check-off UI
-- US-012: Streak display component
+**Feature 3: UI (4 stories)**
+- US-009: habit list
+- US-010: add/edit modal
+- US-011: check-off UI
+- US-012: streak display
 
-**Feature 4: Dashboard & Stats (3 stories)**
-- US-013: Today's habits dashboard
-- US-014: Stats page with completion rate
-- US-015: Visual progress indicators
+**Feature 4: Dashboard (3 stories)**
+- US-013: today's habits
+- US-014: stats page
+- US-015: progress indicators
 
-Total: 15 stories. Should I create the prd.json?
+Total: 15 stories. Create prd.json?
 
-**User:** Yes, create it
+**User:** Yes
 
-**Assistant:** [Creates prd.json with all 15 stories, properly ordered]
+**Assistant:** [Creates prd.json with all stories]
 
 ✅ Product plan created!
 ...
@@ -416,138 +549,31 @@ Total: 15 stories. Should I create the prd.json?
 
 ## Checklist Before Creating prd.json
 
+- [ ] Ralph files exist (ralph.sh, prompt.md)
 - [ ] Chatted through feature(s) to understand scope
-- [ ] Each story completable in one iteration (small enough)
-- [ ] Stories ordered by dependency (schema → backend → UI)
-- [ ] Every story has "Typecheck passes" as criterion
-- [ ] UI stories have "Verify in browser using dev-browser skill" as criterion
-- [ ] Acceptance criteria are specific and verifiable
-- [ ] No story depends on a later story
-- [ ] Previous run archived if prd.json exists with different branchName
+- [ ] Each story completable in one iteration
+- [ ] Stories ordered by dependency
+- [ ] Every story has "Typecheck passes"
+- [ ] UI stories have browser verification
+- [ ] Acceptance criteria are verifiable
 
 ---
 
-# Phase 2: The Execution Loop
+## Running Ralph
 
-Once setup is complete, Ralph runs the autonomous loop to implement stories one by one.
-
----
-
-## Loop Workflow
-
-### 0. Read prd.json
+After setup is complete:
 
 ```bash
-cat prd.json
+./scripts/ralph/ralph.sh 20
 ```
 
-Find the first story where `passes: false`, ordered by priority.
+Ralph will:
+1. Read prd.json, find next `passes: false` story
+2. Implement it
+3. Run quality checks
+4. Commit if passing
+5. Set `passes: true`
+6. Log to progress.txt
+7. Repeat until all done or max iterations
 
-### 1. If no incomplete stories
-
-All stories have `passes: true`:
-1. Output `<promise>COMPLETE</promise>`
-2. Archive progress.txt
-3. Report "✅ Build complete - all stories finished!"
-
-### 2. If incomplete stories exist
-
-**Pick the next story:**
-- Find lowest priority number where `passes: false`
-- This ensures dependency order is respected
-
-**Execute the story:**
-
-Implement the acceptance criteria, then:
-
-1. Run quality checks: `npm run typecheck` (and tests if applicable)
-   - If fails, FIX THE ISSUES and re-run until passing
-   - Do NOT proceed until quality checks pass
-
-2. Update AGENTS.md if you learned something important:
-   - Add patterns, gotchas, conventions for future developers/iterations
-
-3. Update progress.txt (APPEND):
-   ```
-   ## [Date] - US-XXX: [Story Title]
-   - What was implemented
-   - Files changed
-   - Learnings for future iterations
-   ---
-   ```
-
-4. Commit changes: `git add . && git commit -m "feat: [Story Title]"`
-
-5. Update prd.json: Set `passes: true` for this story, add notes if relevant
-
-6. Continue to next story (or exit if all complete)
-
----
-
-## Progress File Format
-
-```markdown
-# Ralph Progress Log
-Started: [date]
-Feature: [feature/product name]
-
-## Codebase Patterns
-(Patterns discovered during this build - useful for remaining stories)
-
----
-
-## [Date] - US-001: [Story Title]
-- What was implemented
-- Files changed
-- Learnings for future iterations
----
-
-## [Date] - US-002: [Story Title]
-- What was implemented
-- Files changed
----
-```
-
----
-
-## Browser Verification
-
-For UI stories, use the dev-browser skill:
-
-**Functional testing** (checking behavior):
-- Navigate to the page
-- Interact with elements
-- Verify expected behavior
-
-**Visual testing** (checking appearance):
-- Take screenshots
-- Verify layout and styling
-
----
-
-## Quality Requirements
-
-Before marking any story as `passes: true`:
-- Typecheck must pass
-- Tests must pass (if applicable)
-- Changes must be committed
-- Progress must be logged
-
----
-
-## Stop Condition
-
-When all stories have `passes: true`:
-1. Output: `<promise>COMPLETE</promise>`
-2. Ralph.sh detects this and exits the loop
-3. Feature/product is complete!
-
----
-
-## Important Notes
-
-- Each iteration runs in a fresh Claude instance with clean context
-- prd.json is the source of truth for what's done
-- progress.txt provides context between iterations
-- Stories execute in priority order - respect the dependencies
-- Keep stories small enough to complete in one context window
+When all stories pass, Ralph outputs `<promise>COMPLETE</promise>` and exits.
