@@ -1,6 +1,6 @@
 ---
 name: ralph
-description: "Set up Ralph for autonomous feature development. Use when starting a new feature that Ralph will implement. Triggers on: ralph, set up ralph, start ralph, new ralph feature, ralph setup. Chats through the feature idea, creates tasks with dependencies, and sets up everything for Ralph to run."
+description: "Autonomous feature development - setup and execution. Triggers on: ralph, set up ralph, run ralph, run the loop, implement tasks. Three phases: (1) Setup - chat through feature, create tasks with dependencies (2) Loop - pick ready tasks, implement, commit, repeat until done (3) Full Product - plan entire product, break into features, build sequentially."
 ---
 
 # Ralph Feature Setup
@@ -31,7 +31,7 @@ Interactive feature planning that creates ralph-ready tasks with dependencies.
 3. Break each feature into small tasks - Same sizing rules as Mode 1
 4. Create hierarchical task structure - Product → Features → Tasks
 5. Set up ralph files - Start with first feature's parent ID
-6. Plan the feature sequence - Which features to build first
+6. Ralph auto-progresses through features until product is complete
 
 **Ask the user which mode they need:**
 ```
@@ -162,7 +162,7 @@ Implement category name to ID mapping for expenses.
 
 ## Step 5: Set Up Ralph Files
 
-After creating all tasks, **run the shared setup steps from "Final Setup (Required for Both Modes)" section.**
+After creating all tasks, **run the shared setup steps from "Final Setup (Required for All Modes)" section.**
 
 This ensures:
 - Parent task ID is saved to `scripts/ralph/parent-task-id.txt`
@@ -253,7 +253,7 @@ These tasks don't have dependencies set. Should I:
 
 ### Set up ralph files:
 
-**Run the shared setup steps from "Final Setup (Required for Both Modes)" section below.**
+**Run the shared setup steps from "Final Setup (Required for All Modes)" section below.**
 
 ### Show status:
 
@@ -364,12 +364,12 @@ task_list create
 
 ### Step 5: Set Up for First Feature
 
-Ralph works on one feature at a time. Set up for the first feature:
+Ralph works through features sequentially. Set up for the first feature:
 
 1. Save the **first feature's ID** (not the product ID) to parent-task-id.txt
-2. Also save a `feature-sequence.txt` file listing all feature IDs in order
+2. Save a `feature-sequence.txt` file listing all feature IDs in order
 3. Ralph will complete all tasks in that feature
-4. When a feature completes, Ralph automatically updates parent-task-id.txt to the next feature in the sequence
+4. When a feature completes, Ralph automatically updates parent-task-id.txt to the next feature
 5. Repeat until all features are complete
 
 **Create the feature sequence file:**
@@ -381,8 +381,6 @@ cat > scripts/ralph/feature-sequence.txt << 'EOF'
 ...
 EOF
 ```
-
-Ralph reads this file to know which feature comes next after completing the current one.
 
 ### Step 6: Confirm Product Setup
 
@@ -416,71 +414,6 @@ Ralph will automatically:
 2. Update parent-task-id.txt to Feature 2
 3. Continue until all features are complete
 ```
-
-### Product Build Tips
-
-**Start small:** Begin with the minimal viable feature set. You can always add more features later.
-
-**Vertical slices:** Each feature should be a complete vertical slice (database → backend → frontend) so you have working functionality after each feature.
-
-**Test as you go:** Include testing tasks within each feature, not as a separate feature at the end.
-
-**Keep features independent:** Where possible, design features to be buildable in any order. This gives flexibility.
-
----
-
-## Continuous Learning (All Modes)
-
-These principles apply to **all three modes** during task execution:
-
-### 1. Update progress.txt (Short-Term Memory)
-
-After completing each task, **append** to progress.txt:
-```markdown
-## [Date] - [Task Title]
-Task ID: [task-id]
-- What was implemented
-- Files changed
-- **Learnings for future iterations:**
-  - Patterns discovered
-  - Gotchas encountered
-  - Useful context
----
-```
-
-If you discover a reusable pattern, add it to the `## Codebase Patterns` section at the TOP of progress.txt.
-
-### 2. Update AGENTS.md (Long-Term Memory)
-
-When you learn something that **anyone editing this code** should know:
-- Check for AGENTS.md in directories where you edited files
-- Add patterns, gotchas, dependencies, architectural decisions
-- This persists across features - it's institutional knowledge
-- Do NOT add task-specific details or temporary notes
-
-### 3. Discover New Tasks
-
-While working, **liberally create new tasks** when you discover:
-- Failing tests or test gaps
-- Code that needs refactoring
-- Missing error handling
-- Edge cases not covered
-- TODOs or FIXMEs in the code
-- Build/lint warnings
-- Performance issues
-- Additional user stories implied by the current work
-
-Create tasks immediately with appropriate `dependsOn` relationships. Don't wait until the current task is done.
-
-### 4. Quality Gates
-
-Before marking any task complete:
-- `npm run typecheck` must pass
-- `npm test` must pass (if applicable)
-- Changes must be committed
-- Progress must be logged
-
-**Never skip quality checks.** If they fail, fix the issues before proceeding.
 
 ### Example Product Breakdown
 
@@ -696,7 +629,7 @@ When all subtasks are completed:
 
 ## Checklist Before Creating Tasks
 
-**For all modes:**
+- [ ] Chatted through feature to understand scope
 - [ ] Each task completable in one iteration (small enough)
 - [ ] Tasks ordered by dependency (schema → backend → UI → tests)
 - [ ] Every task has "npm run typecheck passes" in description
@@ -704,18 +637,228 @@ When all subtasks are completed:
 - [ ] Descriptions have enough detail for Ralph to implement without context
 - [ ] Parent task ID saved to scripts/ralph/parent-task-id.txt
 - [ ] Previous run archived if progress.txt had content
+- [ ] (Mode 3 only) Feature sequence saved to feature-sequence.txt
 
-**For Mode 1 (New Feature):**
-- [ ] Chatted through feature to understand scope
+---
 
-**For Mode 2 (Existing Tasks):**
-- [ ] Verified subtasks exist with proper dependencies
-- [ ] Confirmed at least one task is ready (no blockers)
+# Phase 2: The Execution Loop
 
-**For Mode 3 (Full Product):**
-- [ ] Understood complete product vision and scope
-- [ ] Broke product into distinct features/epics
-- [ ] Created hierarchical structure (Product → Features → Tasks)
-- [ ] Features ordered by dependencies
-- [ ] First feature's ID saved to parent-task-id.txt (not product ID)
-- [ ] Feature sequence saved to feature-sequence.txt for automatic progression
+Once setup is complete, Ralph runs the autonomous loop to implement tasks one by one.
+
+---
+
+## Loop Workflow
+
+### 0. Get the parent task ID
+
+First, read the parent task ID that scopes this feature:
+
+```bash
+cat scripts/ralph/parent-task-id.txt
+```
+
+If this file doesn't exist, ask the user which parent task to work on.
+
+**Check if this is a new feature:** Compare the parent task ID to the one in `scripts/ralph/progress.txt` header. If they differ (or progress.txt doesn't exist), this is a NEW feature - reset progress.txt:
+
+```markdown
+# Build Progress Log
+Started: [today's date]
+Feature: [parent task title]
+
+## Codebase Patterns
+(Patterns discovered during this feature build)
+
+---
+```
+
+This ensures each feature starts with a clean slate. Progress.txt is SHORT-TERM memory for the current feature only.
+
+### 1. Check for ready tasks (with nested hierarchy support)
+
+The task hierarchy may have multiple levels (parent → container → leaf tasks). Use this approach to find all descendant tasks:
+
+**Step 1: Get all tasks for the repo**
+```
+task_list action: "list", repoURL: "<repo-url>", ready: true, status: "open", limit: 10
+```
+
+**Important:** Always use `limit` (5-10) to avoid context overflow with many tasks.
+
+**Step 2: Build the descendant set**
+Starting from the parent task ID, collect all tasks that are descendants:
+1. Find tasks where `parentID` equals the parent task ID (direct children)
+2. For each child found, recursively find their children
+3. Continue until no more descendants are found
+
+**Step 3: Filter to workable tasks**
+From the descendant set, select tasks that are:
+- `ready: true` (all dependencies satisfied)
+- `status: "open"`
+- Leaf tasks (no children of their own) - these are the actual work items
+
+**CRITICAL:** Skip container tasks that exist only to group other tasks. A container task has other tasks with its ID as their `parentID`.
+
+### 2. If no ready tasks
+
+Check if all descendant tasks are completed:
+- Query `task_list list` with `repoURL: "<repo-url>"` (no ready filter)
+- Build the full descendant set (same recursive approach as step 1)
+- If all leaf tasks in the descendant set are `completed`:
+  1. Archive progress.txt:
+     ```bash
+     DATE=$(date +%Y-%m-%d)
+     FEATURE="feature-name-here"
+     mkdir -p scripts/ralph/archive/$DATE-$FEATURE
+     mv scripts/ralph/progress.txt scripts/ralph/archive/$DATE-$FEATURE/
+     ```
+  2. Create fresh progress.txt with empty template
+  3. **For Mode 3:** Check feature-sequence.txt for next feature. If exists, update parent-task-id.txt and continue. If no more features, proceed to step 5.
+  4. Clear parent-task-id.txt: `echo "" > scripts/ralph/parent-task-id.txt`
+  5. Commit: `git add scripts/ralph && git commit -m "chore: archive progress for [feature-name]"`
+  6. Mark the parent task as `completed`
+  7. Stop and report "✅ Build complete - all tasks finished!"
+- If some are blocked: Report which tasks are blocked and why
+
+### 3. If ready tasks exist
+
+**Pick the next task:**
+- Prefer tasks related to what was just completed (same module/area, dependent work)
+- If no prior context, pick the first ready task
+
+**Execute the task:**
+
+Use the `handoff` tool with this goal:
+
+```
+Implement and verify task [task-id]: [task-title].
+
+[task-description]
+
+FIRST: Read scripts/ralph/progress.txt - check the "Codebase Patterns" section for important context from previous iterations.
+
+When complete:
+
+1. Run quality checks: `npm run typecheck` and `npm test`
+   - If either fails, FIX THE ISSUES and re-run until both pass
+   - Do NOT proceed until quality checks pass
+
+2. Update AGENTS.md files if you learned something important:
+   - Check for AGENTS.md in directories where you edited files
+   - Add learnings that future developers/agents should know (patterns, gotchas, dependencies)
+   - This is LONG-TERM memory - things anyone editing this code should know
+   - Do NOT add task-specific details or temporary notes
+
+3. Update progress.txt (APPEND, never replace) - this is SHORT-TERM memory for the current feature:
+   ```
+   ## [Date] - [Task Title]
+   Thread: [current thread URL]
+   Task ID: [task-id]
+   - What was implemented
+   - Files changed
+   - **Learnings for future iterations:**
+     - Patterns discovered
+     - Gotchas encountered
+     - Useful context
+   ---
+   ```
+
+4. If you discovered a reusable pattern for THIS FEATURE, add it to the `## Codebase Patterns` section at the TOP of progress.txt
+
+5. Commit all changes with message: `feat: [Task Title]`
+
+6. Mark task as completed: `task_list action: "update", taskID: "[task-id]", status: "completed"`
+
+7. Invoke the ralph skill to continue the loop
+```
+
+---
+
+## Progress File Format
+
+```markdown
+# Build Progress Log
+Started: [date]
+Feature: [feature name]
+Parent Task: [parent-task-id]
+
+## Codebase Patterns
+(Patterns discovered during this feature build)
+
+---
+
+## [Date] - [Task Title]
+Thread: [current session reference]
+Task ID: [id]
+- What was implemented
+- Files changed
+- **Learnings for future iterations:**
+  - Patterns discovered
+  - Gotchas encountered
+---
+```
+
+**Note:** When a new feature starts with a different parent task ID, reset progress.txt completely. Long-term learnings belong in AGENTS.md files, not progress.txt.
+
+---
+
+## Task Discovery
+
+While working, **liberally create new tasks** when you discover:
+- Failing tests or test gaps
+- Code that needs refactoring
+- Missing error handling
+- Documentation gaps
+- TODOs or FIXMEs in the code
+- Build/lint warnings
+- Performance issues
+
+Use `task_list action: "create"` immediately. Set appropriate `dependsOn` relationships.
+
+---
+
+## Browser Verification
+
+For UI tasks, specify the right verification method:
+
+**Functional testing** (checking behavior, not appearance):
+```
+Use Chrome DevTools MCP with take_snapshot to read page content
+```
+- `take_snapshot` returns the a11y tree as text that can be read and verified
+- Use for: button exists, text appears, form works
+
+**Visual testing** (checking appearance):
+```
+Use take_screenshot to capture and verify visual appearance
+```
+- Use for: layout, colors, styling, animations
+
+---
+
+## Quality Requirements
+
+Before marking any task complete:
+- `npm run typecheck` must pass
+- `npm test` must pass
+- Changes must be committed
+- Progress must be logged
+
+---
+
+## Stop Condition
+
+When no ready tasks remain AND all tasks are completed:
+1. Output: "✅ Build complete - all tasks finished!"
+2. Summarize what was accomplished
+
+---
+
+## Important Notes
+
+- Always use `ready: true` when listing tasks to only get tasks with satisfied dependencies
+- Always use `limit: 5-10` when listing tasks to avoid context overflow
+- Each handoff runs in a fresh thread with clean context
+- Progress.txt is the memory between iterations - keep it updated
+- Prefer tasks in the same area as just-completed work for better context continuity
+- The handoff goal MUST include instructions to update progress.txt, commit, and re-invoke this skill
