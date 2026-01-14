@@ -705,18 +705,26 @@ Check if all descendant tasks are completed:
 - Query `task_list list` with `repoURL: "<repo-url>"` (no ready filter)
 - Build the full descendant set (same recursive approach as step 1)
 - If all leaf tasks in the descendant set are `completed`:
-  1. Archive progress.txt:
+  1. Mark the current parent task as `completed`
+  2. Archive progress.txt:
      ```bash
      DATE=$(date +%Y-%m-%d)
      FEATURE="feature-name-here"
      mkdir -p scripts/ralph/archive/$DATE-$FEATURE
      mv scripts/ralph/progress.txt scripts/ralph/archive/$DATE-$FEATURE/
      ```
-  2. Create fresh progress.txt with empty template
-  3. **For Mode 3:** Check feature-sequence.txt for next feature. If exists, update parent-task-id.txt and continue. If no more features, proceed to step 5.
+  3. **For Mode 3 (Full Product):** Check feature-sequence.txt for next feature:
+     - Read current feature ID from parent-task-id.txt
+     - Find the next feature ID in feature-sequence.txt
+     - If next feature exists:
+       a. Update parent-task-id.txt with next feature ID
+       b. Create fresh progress.txt for the new feature
+       c. Commit: `git add scripts/ralph && git commit -m "chore: completed [feature-name], starting next feature"`
+       d. **Loop back to step 1** (check for ready tasks in the new feature)
+     - If no more features: proceed to step 4
   4. Clear parent-task-id.txt: `echo "" > scripts/ralph/parent-task-id.txt`
-  5. Commit: `git add scripts/ralph && git commit -m "chore: archive progress for [feature-name]"`
-  6. Mark the parent task as `completed`
+  5. Create fresh progress.txt with empty template
+  6. Commit: `git add scripts/ralph && git commit -m "chore: archive progress for [feature-name]"`
   7. Stop and report "✅ Build complete - all tasks finished!"
 - If some are blocked: Report which tasks are blocked and why
 
