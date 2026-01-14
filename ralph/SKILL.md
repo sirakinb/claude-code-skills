@@ -56,7 +56,7 @@ Then ask clarifying questions:
 
 **Each task must be completable in ONE Ralph iteration (~one context window).**
 
-Ralph spawns a fresh Amp instance per iteration with no memory of previous work. If a task is too big, the LLM runs out of context before finishing.
+Ralph spawns a fresh Claude instance per iteration with no memory of previous work. If a task is too big, the LLM runs out of context before finishing.
 
 ### Right-sized tasks:
 - Add a database column + migration
@@ -186,7 +186,7 @@ npx tsx scripts/ralph/ralph.ts [max_iterations]
 
 **To check status:**
 ```bash
-amp task list --parentID [parent-id] --limit 10
+# Use your task management tool to list subtasks under [parent-id]
 ```
 
 ---

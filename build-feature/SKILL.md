@@ -13,7 +13,7 @@ Autonomous task execution loop that implements tasks one by one until complete.
 
 **Each task must be completable in ONE iteration (~one context window).**
 
-Each iteration spawns a fresh Amp instance with no memory of previous work. If a task is too big, the LLM runs out of context before finishing.
+Each iteration spawns a fresh Claude instance with no memory of previous work. If a task is too big, the LLM runs out of context before finishing.
 
 ### Right-sized tasks:
 - Add a database column + migration
@@ -175,7 +175,7 @@ Parent Task: [parent-task-id]
 ---
 
 ## [Date] - [Task Title]
-Thread: https://ampcode.com/threads/[thread-id]
+Thread: [current session reference]
 Task ID: [id]
 - What was implemented
 - Files changed

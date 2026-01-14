@@ -24,13 +24,13 @@ Launches a Chromium browser with a **persistent profile**. Login sessions, cooki
 **Start the server:**
 
 ```bash
-~/.config/amp/skills/dev-browser/server.sh &
+~/.claude/skills/dev-browser/server.sh &
 ```
 
 Wait for the `Ready` message before running scripts. Add `--headless` flag if user requests headless mode.
 
 **Key points:**
-- Profile stored at `~/.config/amp/skills/dev-browser/profiles/browser-data`
+- Profile stored at `~/.claude/skills/dev-browser/profiles/browser-data`
 - Once logged in, future sessions remain authenticated
 - Use this mode for local dev testing with auth (localhost:3000, etc.)
 
@@ -39,7 +39,7 @@ Wait for the `Ready` message before running scripts. Add `--headless` flag if us
 Connects to user's existing Chrome browser. **Only use when explicitly requested** - the user must install a browser extension.
 
 ```bash
-cd ~/.config/amp/skills/dev-browser && npm i && npm run start-extension &
+cd ~/.claude/skills/dev-browser && npm i && npm run start-extension &
 ```
 
 Download link: https://github.com/SawyerHood/dev-browser/releases
@@ -51,7 +51,7 @@ Download link: https://github.com/SawyerHood/dev-browser/releases
 Execute scripts inline using heredocs:
 
 ```bash
-cd ~/.config/amp/skills/dev-browser && npx tsx <<'EOF'
+cd ~/.claude/skills/dev-browser && npx tsx <<'EOF'
 import { connect, waitForPageLoad } from "@/client.js";
 
 const client = await connect();
@@ -244,7 +244,7 @@ await element.click();
 Page state persists after failures. Debug with:
 
 ```bash
-cd ~/.config/amp/skills/dev-browser && npx tsx <<'EOF'
+cd ~/.claude/skills/dev-browser && npx tsx <<'EOF'
 import { connect } from "@/client.js";
 
 const client = await connect();
