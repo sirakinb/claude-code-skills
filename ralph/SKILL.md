@@ -367,9 +367,22 @@ task_list create
 Ralph works on one feature at a time. Set up for the first feature:
 
 1. Save the **first feature's ID** (not the product ID) to parent-task-id.txt
-2. Ralph will complete all tasks in that feature
-3. When done, update parent-task-id.txt to the next feature
-4. Repeat until all features are complete
+2. Also save a `feature-sequence.txt` file listing all feature IDs in order
+3. Ralph will complete all tasks in that feature
+4. When a feature completes, Ralph automatically updates parent-task-id.txt to the next feature in the sequence
+5. Repeat until all features are complete
+
+**Create the feature sequence file:**
+```bash
+cat > scripts/ralph/feature-sequence.txt << 'EOF'
+<feature-1-id>
+<feature-2-id>
+<feature-3-id>
+...
+EOF
+```
+
+Ralph reads this file to know which feature comes next after completing the current one.
 
 ### Step 6: Confirm Product Setup
 
@@ -393,16 +406,15 @@ Show the user the full plan:
 - Task 2: [title]
 - ...
 
-**To start Ralph on Feature 1:**
+**To start Ralph:**
 ```bash
 ./scripts/ralph/ralph.sh [max_iterations]
 ```
 
-**When Feature 1 is complete, update to Feature 2:**
-```bash
-echo "<feature-2-id>" > scripts/ralph/parent-task-id.txt
-./scripts/ralph/ralph.sh [max_iterations]
-```
+Ralph will automatically:
+1. Complete all tasks in Feature 1
+2. Update parent-task-id.txt to Feature 2
+3. Continue until all features are complete
 ```
 
 ### Product Build Tips
@@ -651,4 +663,4 @@ When all subtasks are completed:
 - [ ] Created hierarchical structure (Product → Features → Tasks)
 - [ ] Features ordered by dependencies
 - [ ] First feature's ID saved to parent-task-id.txt (not product ID)
-- [ ] Documented feature sequence for manual progression
+- [ ] Feature sequence saved to feature-sequence.txt for automatic progression
