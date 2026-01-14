@@ -1,6 +1,6 @@
 ---
 name: ralph
-description: "Autonomous feature development - setup and execution. Triggers on: ralph, set up ralph, run ralph, run the loop, implement tasks. Three modes: (1) New Feature - plan and create tasks (2) Existing Tasks - set up Ralph for existing tasks (3) Full Product - plan entire product, same execution as Mode 1."
+description: "Autonomous feature development - setup and execution. Triggers on: ralph, set up ralph, run ralph, run the loop, implement tasks. Three modes: (1) New Feature - plan and create tasks (2) Existing Tasks - set up Ralph for existing tasks (3) Full Product - read PRD, create tasks, build entire product."
 ---
 
 # Ralph Feature Setup
@@ -26,12 +26,11 @@ Interactive feature planning that creates ralph-ready tasks with dependencies.
 4. Show status - Which tasks are ready, completed, blocked
 
 ### Mode 3: Full Product Build
-1. Chat through the product vision - Understand the complete scope
-2. Break into features - Identify major pieces of the product
-3. Break features into tasks - Same sizing rules as Mode 1
-4. Create all tasks with dependencies - Chain features together via `dependsOn`
-5. Set up ralph files - Same as Mode 1
-6. Ralph works through all tasks until product is complete
+1. Read the existing PRD - User stories and requirements are already defined
+2. Break user stories into tasks - Same sizing rules as Mode 1
+3. Create all tasks with dependencies - Chain user stories together via `dependsOn`
+4. Set up ralph files - Same as Mode 1
+5. Ralph works through all tasks until product is complete
 
 **Ask the user which mode they need:**
 ```
@@ -281,48 +280,34 @@ npx tsx scripts/ralph/ralph.ts [max_iterations]
 
 ## Mode 3: Building a Full Product
 
-Mode 3 is **Mode 1 at product scale**. Same task sizing rules, same dependency system, same execution loop - just with an extra planning layer to break the product into features first.
+Mode 3 is **Mode 1 at product scale**. Same task sizing rules, same dependency system, same execution loop.
 
-### Step 1: Understand the Product Vision
+**Assumes you already have a PRD** (use the `/prd` skill first if needed).
 
-Start with big-picture questions:
+### Step 1: Read the PRD
+
+Ask the user for the PRD location:
 ```
-What product are you building? Tell me about:
-- What problem does it solve?
-- Who is the target user?
-- What are the core features (the MVP)?
-- What's the tech stack? (or should I recommend one?)
+Where is your PRD? (e.g., /tasks/prd-my-product.md)
 ```
 
-Then dig deeper:
-- What does the user journey look like?
-- Are there any third-party integrations needed?
-- What's the authentication/authorization model?
-- Is there a database? What entities need to be stored?
+Read the PRD and extract:
+- User stories
+- Functional requirements
+- Technical considerations
 
-**Keep asking until you understand the full scope.**
+### Step 2: Break Into Tasks
 
-### Step 2: Break Into Features
-
-Identify the major features that make up the product.
-
-**Typical product breakdown:**
-1. **Project Setup** - Initialize repo, install dependencies, configure tooling
-2. **Database/Schema** - Design and create the data model
-3. **Authentication** - User signup, login, sessions
-4. **Core Feature 1** - The main value proposition
-5. **Core Feature 2** - Secondary functionality
-6. **UI/Layout** - Navigation, layout, styling
-7. **Deployment** - CI/CD, hosting, environment setup
-
-### Step 3: Break Features Into Tasks
+Convert the PRD's user stories and requirements into ralph-sized tasks.
 
 **Same sizing rules as Mode 1 apply.** Each task must be completable in ONE Ralph iteration.
 
-For each feature, break it into right-sized tasks:
-- Feature: "Authentication" → Tasks: schema migration, signup endpoint, login endpoint, session middleware, login UI, signup UI, tests
+Group tasks by feature/user story and ensure proper ordering:
+- US-001 tasks first (schema, backend, UI, tests)
+- US-002 tasks next (depends on US-001 completion)
+- etc.
 
-### Step 4: Create Tasks with Dependencies
+### Step 3: Create Tasks with Dependencies
 
 Create a parent task for the product, then all tasks as children with proper `dependsOn`:
 
@@ -344,34 +329,34 @@ task_list create
   repoURL: "<repo-url>"
 ```
 
-**Key:** The last task of Feature 1 should be in `dependsOn` for the first task of Feature 2. This chains features together naturally.
+**Key:** The last task of US-001 should be in `dependsOn` for the first task of US-002. This chains user stories together naturally.
 
-### Step 5: Set Up Ralph Files
+### Step 4: Set Up Ralph Files
 
 Same as Mode 1 - save the product task ID to parent-task-id.txt and run the Final Setup steps.
 
-### Step 6: Confirm Product Setup
+### Step 5: Confirm Product Setup
 
 Show the user the full plan:
 
 ```
-✅ Product plan created!
+✅ Product plan created from PRD!
 
 **Product:** [name] (ID: [product-id])
 
-**Tasks by feature:**
+**Tasks by user story:**
 
-Feature 1: Project Setup
+US-001: [User story title]
 1. [Task 1] - no dependencies
 2. [Task 2] - depends on #1
 3. [Task 3] - depends on #2
 
-Feature 2: Authentication
-4. [Task 4] - depends on #3 (chains to Feature 1)
+US-002: [User story title]
+4. [Task 4] - depends on #3 (chains to US-001)
 5. [Task 5] - depends on #4
 ...
 
-**Total:** [N] tasks
+**Total:** [N] tasks from [X] user stories
 
 **To run Ralph:**
 ```bash
@@ -381,25 +366,28 @@ Feature 2: Authentication
 Ralph works through all tasks based on dependencies until the entire product is complete.
 ```
 
-### Example Product Breakdown
+### Example: PRD → Tasks
 
-**Product:** Personal Finance Tracker
+**PRD:** Task Priority System (from `/tasks/prd-task-priority.md`)
 
-**Tasks (with dependencies chaining features together):**
+**User Stories → Tasks:**
 
-1. Initialize Next.js project (no deps)
-2. Set up Postgres + Prisma (depends: 1)
-3. Create transaction schema (depends: 2)
-4. Build transaction list UI (depends: 3)
-5. Add transaction form (depends: 4)
-6. Implement CRUD operations (depends: 5)
-7. Create dashboard layout (depends: 6)
-8. Build spending summary (depends: 7)
-9. Add charts (depends: 8)
-10. Set up Vercel deployment (depends: 9)
-11. Configure CI/CD (depends: 10)
+US-001: Add priority field to database
+1. Add priority column to tasks table (no deps)
 
-Ralph completes task 1, then 2, then 3... until task 11 is done and the product is complete
+US-002: Display priority indicator
+2. Create PriorityBadge component (depends: 1)
+3. Add badge to task cards (depends: 2)
+
+US-003: Add priority selector
+4. Add priority dropdown to task edit modal (depends: 3)
+
+US-004: Filter tasks by priority
+5. Add priority filter dropdown (depends: 4)
+6. Implement filter logic (depends: 5)
+7. Add URL param persistence (depends: 6)
+
+Ralph completes task 1, then 2, then 3... until task 7 is done and the product is complete
 
 ---
 
