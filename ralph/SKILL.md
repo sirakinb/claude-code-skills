@@ -1,6 +1,6 @@
 ---
 name: ralph
-description: "Autonomous feature development - setup and execution. Triggers on: ralph, set up ralph, run ralph, run the loop, implement tasks. Three phases: (1) Setup - chat through feature, create tasks with dependencies (2) Loop - pick ready tasks, implement, commit, repeat until done (3) Full Product - plan entire product, break into features, build sequentially."
+description: "Autonomous feature development - setup and execution. Triggers on: ralph, set up ralph, run ralph, run the loop, implement tasks. Three modes: (1) New Feature - plan and create tasks (2) Existing Tasks - set up Ralph for existing tasks (3) Full Product - plan entire product, same execution as Mode 1."
 ---
 
 # Ralph Feature Setup
@@ -27,11 +27,11 @@ Interactive feature planning that creates ralph-ready tasks with dependencies.
 
 ### Mode 3: Full Product Build
 1. Chat through the product vision - Understand the complete scope
-2. Break into major features/epics - Each feature becomes a parent task
-3. Break each feature into small tasks - Same sizing rules as Mode 1
-4. Create hierarchical task structure - Product → Features → Tasks
-5. Set up ralph files - Start with first feature's parent ID
-6. Ralph auto-progresses through features until product is complete
+2. Break into features - Identify major pieces of the product
+3. Break features into tasks - Same sizing rules as Mode 1
+4. Create all tasks with dependencies - Chain features together via `dependsOn`
+5. Set up ralph files - Same as Mode 1
+6. Ralph works through all tasks until product is complete
 
 **Ask the user which mode they need:**
 ```
@@ -281,7 +281,7 @@ npx tsx scripts/ralph/ralph.ts [max_iterations]
 
 ## Mode 3: Building a Full Product
 
-For building an entire product from scratch, we need a hierarchical approach.
+Mode 3 is **Mode 1 at product scale**. Same task sizing rules, same dependency system, same execution loop - just with an extra planning layer to break the product into features first.
 
 ### Step 1: Understand the Product Vision
 
@@ -302,9 +302,9 @@ Then dig deeper:
 
 **Keep asking until you understand the full scope.**
 
-### Step 2: Break Into Features/Epics
+### Step 2: Break Into Features
 
-Identify the major features that make up the product. Each feature will become its own parent task with subtasks.
+Identify the major features that make up the product.
 
 **Typical product breakdown:**
 1. **Project Setup** - Initialize repo, install dependencies, configure tooling
@@ -313,28 +313,19 @@ Identify the major features that make up the product. Each feature will become i
 4. **Core Feature 1** - The main value proposition
 5. **Core Feature 2** - Secondary functionality
 6. **UI/Layout** - Navigation, layout, styling
-7. **Integration** - Third-party services, APIs
-8. **Polish** - Error handling, loading states, edge cases
-9. **Testing** - Unit tests, integration tests, E2E
-10. **Deployment** - CI/CD, hosting, environment setup
+7. **Deployment** - CI/CD, hosting, environment setup
 
-### Step 3: Order Features by Dependencies
+### Step 3: Break Features Into Tasks
 
-Features have dependencies just like tasks:
+**Same sizing rules as Mode 1 apply.** Each task must be completable in ONE Ralph iteration.
 
-```
-1. Project Setup (no dependencies)
-2. Database/Schema (depends on: setup)
-3. Authentication (depends on: schema)
-4. Core Features (depends on: auth, schema)
-5. UI/Layout (depends on: core features)
-6. Testing (depends on: all features)
-7. Deployment (depends on: testing)
-```
+For each feature, break it into right-sized tasks:
+- Feature: "Authentication" → Tasks: schema migration, signup endpoint, login endpoint, session middleware, login UI, signup UI, tests
 
-### Step 4: Create the Task Hierarchy
+### Step 4: Create Tasks with Dependencies
 
-**Level 1: Product (top-level parent)**
+Create a parent task for the product, then all tasks as children with proper `dependsOn`:
+
 ```
 task_list create
   title: "[Product Name]"
@@ -342,45 +333,22 @@ task_list create
   repoURL: "<repo-url>"
 ```
 
-**Level 2: Features (children of product)**
-```
-task_list create
-  title: "[Feature Name]"
-  description: "[Feature description and scope]"
-  parentID: "<product-task-id>"
-  dependsOn: ["<previous-feature-id>"]  // if sequential
-  repoURL: "<repo-url>"
-```
+Then create all tasks with dependencies that ensure correct ordering:
 
-**Level 3: Tasks (children of features)**
 ```
 task_list create
   title: "[Task title]"
-  description: "[Detailed task description]"
-  parentID: "<feature-task-id>"
-  dependsOn: ["<previous-task-id>"]
+  description: "[Detailed task description - same format as Mode 1]"
+  parentID: "<product-task-id>"
+  dependsOn: ["<previous-task-id>"]  // links features together
   repoURL: "<repo-url>"
 ```
 
-### Step 5: Set Up for First Feature
+**Key:** The last task of Feature 1 should be in `dependsOn` for the first task of Feature 2. This chains features together naturally.
 
-Ralph works through features sequentially. Set up for the first feature:
+### Step 5: Set Up Ralph Files
 
-1. Save the **first feature's ID** (not the product ID) to parent-task-id.txt
-2. Save a `feature-sequence.txt` file listing all feature IDs in order
-3. Ralph will complete all tasks in that feature
-4. When a feature completes, Ralph automatically updates parent-task-id.txt to the next feature
-5. Repeat until all features are complete
-
-**Create the feature sequence file:**
-```bash
-cat > scripts/ralph/feature-sequence.txt << 'EOF'
-<feature-1-id>
-<feature-2-id>
-<feature-3-id>
-...
-EOF
-```
+Same as Mode 1 - save the product task ID to parent-task-id.txt and run the Final Setup steps.
 
 ### Step 6: Confirm Product Setup
 
@@ -391,69 +359,47 @@ Show the user the full plan:
 
 **Product:** [name] (ID: [product-id])
 
-**Features (in order):**
-1. [Feature 1] (ID: [id]) - [X] tasks - no dependencies
-2. [Feature 2] (ID: [id]) - [X] tasks - depends on #1
-3. [Feature 3] (ID: [id]) - [X] tasks - depends on #2
+**Tasks by feature:**
+
+Feature 1: Project Setup
+1. [Task 1] - no dependencies
+2. [Task 2] - depends on #1
+3. [Task 3] - depends on #2
+
+Feature 2: Authentication
+4. [Task 4] - depends on #3 (chains to Feature 1)
+5. [Task 5] - depends on #4
 ...
 
-**Total:** [N] features, [M] tasks
+**Total:** [N] tasks
 
-**First feature to build:** [Feature 1]
-- Task 1: [title]
-- Task 2: [title]
-- ...
-
-**To start Ralph:**
+**To run Ralph:**
 ```bash
 ./scripts/ralph/ralph.sh [max_iterations]
 ```
 
-Ralph will automatically:
-1. Complete all tasks in Feature 1
-2. Update parent-task-id.txt to Feature 2
-3. Continue until all features are complete
+Ralph works through all tasks based on dependencies until the entire product is complete.
 ```
 
 ### Example Product Breakdown
 
 **Product:** Personal Finance Tracker
 
-**Features:**
-1. **Project Setup** (3 tasks)
-   - Initialize Next.js project with TypeScript
-   - Set up database (Postgres + Prisma)
-   - Configure authentication (NextAuth)
+**Tasks (with dependencies chaining features together):**
 
-2. **Transaction Management** (8 tasks)
-   - Create transaction schema
-   - Build transaction list UI
-   - Add transaction form
-   - Implement CRUD operations
-   - Add category support
-   - Implement filtering
-   - Add pagination
-   - Write tests
+1. Initialize Next.js project (no deps)
+2. Set up Postgres + Prisma (depends: 1)
+3. Create transaction schema (depends: 2)
+4. Build transaction list UI (depends: 3)
+5. Add transaction form (depends: 4)
+6. Implement CRUD operations (depends: 5)
+7. Create dashboard layout (depends: 6)
+8. Build spending summary (depends: 7)
+9. Add charts (depends: 8)
+10. Set up Vercel deployment (depends: 9)
+11. Configure CI/CD (depends: 10)
 
-3. **Dashboard** (5 tasks)
-   - Create dashboard layout
-   - Build spending summary component
-   - Add charts/visualizations
-   - Implement date range picker
-   - Write tests
-
-4. **Budget Tracking** (6 tasks)
-   - Create budget schema
-   - Build budget list UI
-   - Add budget form
-   - Implement budget vs actual comparison
-   - Add alerts for overspending
-   - Write tests
-
-5. **Deployment** (3 tasks)
-   - Set up Vercel deployment
-   - Configure environment variables
-   - Add CI/CD pipeline
+Ralph completes task 1, then 2, then 3... until task 11 is done and the product is complete
 
 ---
 
@@ -637,7 +583,6 @@ When all subtasks are completed:
 - [ ] Descriptions have enough detail for Ralph to implement without context
 - [ ] Parent task ID saved to scripts/ralph/parent-task-id.txt
 - [ ] Previous run archived if progress.txt had content
-- [ ] (Mode 3 only) Feature sequence saved to feature-sequence.txt
 
 ---
 
@@ -705,7 +650,7 @@ Check if all descendant tasks are completed:
 - Query `task_list list` with `repoURL: "<repo-url>"` (no ready filter)
 - Build the full descendant set (same recursive approach as step 1)
 - If all leaf tasks in the descendant set are `completed`:
-  1. Mark the current parent task as `completed`
+  1. Mark the parent task as `completed`
   2. Archive progress.txt:
      ```bash
      DATE=$(date +%Y-%m-%d)
@@ -713,19 +658,10 @@ Check if all descendant tasks are completed:
      mkdir -p scripts/ralph/archive/$DATE-$FEATURE
      mv scripts/ralph/progress.txt scripts/ralph/archive/$DATE-$FEATURE/
      ```
-  3. **For Mode 3 (Full Product):** Check feature-sequence.txt for next feature:
-     - Read current feature ID from parent-task-id.txt
-     - Find the next feature ID in feature-sequence.txt
-     - If next feature exists:
-       a. Update parent-task-id.txt with next feature ID
-       b. Create fresh progress.txt for the new feature
-       c. Commit: `git add scripts/ralph && git commit -m "chore: completed [feature-name], starting next feature"`
-       d. **Loop back to step 1** (check for ready tasks in the new feature)
-     - If no more features: proceed to step 4
-  4. Clear parent-task-id.txt: `echo "" > scripts/ralph/parent-task-id.txt`
-  5. Create fresh progress.txt with empty template
-  6. Commit: `git add scripts/ralph && git commit -m "chore: archive progress for [feature-name]"`
-  7. Stop and report "✅ Build complete - all tasks finished!"
+  3. Clear parent-task-id.txt: `echo "" > scripts/ralph/parent-task-id.txt`
+  4. Create fresh progress.txt with empty template
+  5. Commit: `git add scripts/ralph && git commit -m "chore: archive progress for [feature-name]"`
+  6. Stop and report "✅ Build complete - all tasks finished!"
 - If some are blocked: Report which tasks are blocked and why
 
 ### 3. If ready tasks exist
