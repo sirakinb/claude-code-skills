@@ -11,7 +11,7 @@ Interactive feature planning that creates ralph-ready tasks with dependencies.
 
 ## The Job
 
-**Two modes:**
+**Three modes:**
 
 ### Mode 1: New Feature
 1. Chat through the feature - Ask clarifying questions
@@ -25,11 +25,20 @@ Interactive feature planning that creates ralph-ready tasks with dependencies.
 3. Set up ralph files - Save parent ID to parent-task-id.txt
 4. Show status - Which tasks are ready, completed, blocked
 
+### Mode 3: Full Product Build
+1. Chat through the product vision - Understand the complete scope
+2. Break into major features/epics - Each feature becomes a parent task
+3. Break each feature into small tasks - Same sizing rules as Mode 1
+4. Create hierarchical task structure - Product → Features → Tasks
+5. Set up ralph files - Start with first feature's parent ID
+6. Plan the feature sequence - Which features to build first
+
 **Ask the user which mode they need:**
 ```
 Are you:
 1. Starting a new feature (I'll help you plan and create tasks)
 2. Using existing tasks (I'll set up Ralph to run them)
+3. Building a full product from scratch (I'll help you plan the entire product)
 ```
 
 ---
@@ -270,7 +279,185 @@ npx tsx scripts/ralph/ralph.ts [max_iterations]
 
 ---
 
-## Final Setup (Required for Both Modes)
+## Mode 3: Building a Full Product
+
+For building an entire product from scratch, we need a hierarchical approach.
+
+### Step 1: Understand the Product Vision
+
+Start with big-picture questions:
+```
+What product are you building? Tell me about:
+- What problem does it solve?
+- Who is the target user?
+- What are the core features (the MVP)?
+- What's the tech stack? (or should I recommend one?)
+```
+
+Then dig deeper:
+- What does the user journey look like?
+- Are there any third-party integrations needed?
+- What's the authentication/authorization model?
+- Is there a database? What entities need to be stored?
+
+**Keep asking until you understand the full scope.**
+
+### Step 2: Break Into Features/Epics
+
+Identify the major features that make up the product. Each feature will become its own parent task with subtasks.
+
+**Typical product breakdown:**
+1. **Project Setup** - Initialize repo, install dependencies, configure tooling
+2. **Database/Schema** - Design and create the data model
+3. **Authentication** - User signup, login, sessions
+4. **Core Feature 1** - The main value proposition
+5. **Core Feature 2** - Secondary functionality
+6. **UI/Layout** - Navigation, layout, styling
+7. **Integration** - Third-party services, APIs
+8. **Polish** - Error handling, loading states, edge cases
+9. **Testing** - Unit tests, integration tests, E2E
+10. **Deployment** - CI/CD, hosting, environment setup
+
+### Step 3: Order Features by Dependencies
+
+Features have dependencies just like tasks:
+
+```
+1. Project Setup (no dependencies)
+2. Database/Schema (depends on: setup)
+3. Authentication (depends on: schema)
+4. Core Features (depends on: auth, schema)
+5. UI/Layout (depends on: core features)
+6. Testing (depends on: all features)
+7. Deployment (depends on: testing)
+```
+
+### Step 4: Create the Task Hierarchy
+
+**Level 1: Product (top-level parent)**
+```
+task_list create
+  title: "[Product Name]"
+  description: "Full product build: [one-line description]"
+  repoURL: "<repo-url>"
+```
+
+**Level 2: Features (children of product)**
+```
+task_list create
+  title: "[Feature Name]"
+  description: "[Feature description and scope]"
+  parentID: "<product-task-id>"
+  dependsOn: ["<previous-feature-id>"]  // if sequential
+  repoURL: "<repo-url>"
+```
+
+**Level 3: Tasks (children of features)**
+```
+task_list create
+  title: "[Task title]"
+  description: "[Detailed task description]"
+  parentID: "<feature-task-id>"
+  dependsOn: ["<previous-task-id>"]
+  repoURL: "<repo-url>"
+```
+
+### Step 5: Set Up for First Feature
+
+Ralph works on one feature at a time. Set up for the first feature:
+
+1. Save the **first feature's ID** (not the product ID) to parent-task-id.txt
+2. Ralph will complete all tasks in that feature
+3. When done, update parent-task-id.txt to the next feature
+4. Repeat until all features are complete
+
+### Step 6: Confirm Product Setup
+
+Show the user the full plan:
+
+```
+✅ Product plan created!
+
+**Product:** [name] (ID: [product-id])
+
+**Features (in order):**
+1. [Feature 1] (ID: [id]) - [X] tasks - no dependencies
+2. [Feature 2] (ID: [id]) - [X] tasks - depends on #1
+3. [Feature 3] (ID: [id]) - [X] tasks - depends on #2
+...
+
+**Total:** [N] features, [M] tasks
+
+**First feature to build:** [Feature 1]
+- Task 1: [title]
+- Task 2: [title]
+- ...
+
+**To start Ralph on Feature 1:**
+```bash
+./scripts/ralph/ralph.sh [max_iterations]
+```
+
+**When Feature 1 is complete, update to Feature 2:**
+```bash
+echo "<feature-2-id>" > scripts/ralph/parent-task-id.txt
+./scripts/ralph/ralph.sh [max_iterations]
+```
+```
+
+### Product Build Tips
+
+**Start small:** Begin with the minimal viable feature set. You can always add more features later.
+
+**Vertical slices:** Each feature should be a complete vertical slice (database → backend → frontend) so you have working functionality after each feature.
+
+**Test as you go:** Include testing tasks within each feature, not as a separate feature at the end.
+
+**Keep features independent:** Where possible, design features to be buildable in any order. This gives flexibility.
+
+### Example Product Breakdown
+
+**Product:** Personal Finance Tracker
+
+**Features:**
+1. **Project Setup** (3 tasks)
+   - Initialize Next.js project with TypeScript
+   - Set up database (Postgres + Prisma)
+   - Configure authentication (NextAuth)
+
+2. **Transaction Management** (8 tasks)
+   - Create transaction schema
+   - Build transaction list UI
+   - Add transaction form
+   - Implement CRUD operations
+   - Add category support
+   - Implement filtering
+   - Add pagination
+   - Write tests
+
+3. **Dashboard** (5 tasks)
+   - Create dashboard layout
+   - Build spending summary component
+   - Add charts/visualizations
+   - Implement date range picker
+   - Write tests
+
+4. **Budget Tracking** (6 tasks)
+   - Create budget schema
+   - Build budget list UI
+   - Add budget form
+   - Implement budget vs actual comparison
+   - Add alerts for overspending
+   - Write tests
+
+5. **Deployment** (3 tasks)
+   - Set up Vercel deployment
+   - Configure environment variables
+   - Add CI/CD pipeline
+
+---
+
+## Final Setup (Required for All Modes)
 
 **ALWAYS run these steps after creating tasks OR setting up existing tasks:**
 
@@ -442,7 +629,7 @@ When all subtasks are completed:
 
 ## Checklist Before Creating Tasks
 
-- [ ] Chatted through feature to understand scope
+**For all modes:**
 - [ ] Each task completable in one iteration (small enough)
 - [ ] Tasks ordered by dependency (schema → backend → UI → tests)
 - [ ] Every task has "npm run typecheck passes" in description
@@ -450,3 +637,18 @@ When all subtasks are completed:
 - [ ] Descriptions have enough detail for Ralph to implement without context
 - [ ] Parent task ID saved to scripts/ralph/parent-task-id.txt
 - [ ] Previous run archived if progress.txt had content
+
+**For Mode 1 (New Feature):**
+- [ ] Chatted through feature to understand scope
+
+**For Mode 2 (Existing Tasks):**
+- [ ] Verified subtasks exist with proper dependencies
+- [ ] Confirmed at least one task is ready (no blockers)
+
+**For Mode 3 (Full Product):**
+- [ ] Understood complete product vision and scope
+- [ ] Broke product into distinct features/epics
+- [ ] Created hierarchical structure (Product → Features → Tasks)
+- [ ] Features ordered by dependencies
+- [ ] First feature's ID saved to parent-task-id.txt (not product ID)
+- [ ] Documented feature sequence for manual progression
