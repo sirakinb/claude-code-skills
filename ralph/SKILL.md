@@ -427,6 +427,61 @@ Ralph will automatically:
 
 **Keep features independent:** Where possible, design features to be buildable in any order. This gives flexibility.
 
+---
+
+## Continuous Learning (All Modes)
+
+These principles apply to **all three modes** during task execution:
+
+### 1. Update progress.txt (Short-Term Memory)
+
+After completing each task, **append** to progress.txt:
+```markdown
+## [Date] - [Task Title]
+Task ID: [task-id]
+- What was implemented
+- Files changed
+- **Learnings for future iterations:**
+  - Patterns discovered
+  - Gotchas encountered
+  - Useful context
+---
+```
+
+If you discover a reusable pattern, add it to the `## Codebase Patterns` section at the TOP of progress.txt.
+
+### 2. Update AGENTS.md (Long-Term Memory)
+
+When you learn something that **anyone editing this code** should know:
+- Check for AGENTS.md in directories where you edited files
+- Add patterns, gotchas, dependencies, architectural decisions
+- This persists across features - it's institutional knowledge
+- Do NOT add task-specific details or temporary notes
+
+### 3. Discover New Tasks
+
+While working, **liberally create new tasks** when you discover:
+- Failing tests or test gaps
+- Code that needs refactoring
+- Missing error handling
+- Edge cases not covered
+- TODOs or FIXMEs in the code
+- Build/lint warnings
+- Performance issues
+- Additional user stories implied by the current work
+
+Create tasks immediately with appropriate `dependsOn` relationships. Don't wait until the current task is done.
+
+### 4. Quality Gates
+
+Before marking any task complete:
+- `npm run typecheck` must pass
+- `npm test` must pass (if applicable)
+- Changes must be committed
+- Progress must be logged
+
+**Never skip quality checks.** If they fail, fix the issues before proceeding.
+
 ### Example Product Breakdown
 
 **Product:** Personal Finance Tracker
