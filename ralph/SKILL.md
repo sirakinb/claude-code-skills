@@ -1,11 +1,11 @@
 ---
 name: ralph
-description: "Autonomous feature development - setup and execution. Triggers on: ralph, set up ralph, run ralph, run the loop, implement tasks. Three modes: (1) New Feature - plan and create tasks (2) Existing Tasks - set up Ralph for existing tasks (3) Full Product - read PRD, create tasks, build entire product."
+description: "Autonomous feature development - setup and execution. Triggers on: ralph, set up ralph, run ralph, run the loop, implement tasks. Three modes: (1) New Feature - plan and create tasks for a single feature (2) Existing Tasks - set up Ralph for existing prd.json (3) Full Product - plan and create tasks for entire product with multiple features."
 ---
 
 # Ralph Feature Setup
 
-Interactive feature planning that creates ralph-ready tasks with dependencies.
+Interactive feature planning that creates ralph-ready tasks in prd.json format.
 
 ---
 
@@ -13,39 +13,37 @@ Interactive feature planning that creates ralph-ready tasks with dependencies.
 
 **Three modes:**
 
-### Mode 1: New Feature
+### Mode 1: New Feature (Single Feature)
 1. Chat through the feature - Ask clarifying questions
-2. Break into small tasks - Each completable in one iteration
-3. Create task_list tasks - Parent + subtasks with `dependsOn`
-4. Set up ralph files - Save parent ID, reset progress.txt
+2. Break into small user stories - Each completable in one iteration
+3. Create prd.json - Stories with `passes: false`
+4. Set up ralph files - Reset progress.txt
 
 ### Mode 2: Existing Tasks
-1. Find existing parent task - Search or let user specify
-2. Verify structure - Check subtasks have proper `dependsOn`
-3. Set up ralph files - Save parent ID to parent-task-id.txt
-4. Show status - Which tasks are ready, completed, blocked
+1. Verify prd.json exists and is valid
+2. Show current status - Which stories pass/fail
+3. Set up ralph files if needed
 
-### Mode 3: Full Product Build
-1. Read the existing PRD - User stories and requirements are already defined
-2. Break user stories into tasks - Same sizing rules as Mode 1
-3. Create all tasks with dependencies - Chain user stories together via `dependsOn`
+### Mode 3: Full Product Build (Multiple Features)
+1. Chat through the product - Ask about features, scope, requirements
+2. Break ALL features into small user stories - Same sizing rules as Mode 1
+3. Create prd.json with all stories - Ordered by dependency (schema → backend → UI)
 4. Set up ralph files - Same as Mode 1
-5. Ralph works through all tasks until product is complete
+5. Ralph works through all stories until entire product is complete
 
 **Ask the user which mode they need:**
 ```
 Are you:
-1. Starting a new feature (I'll help you plan and create tasks)
-2. Using existing tasks (I'll set up Ralph to run them)
-3. Building a full product from scratch (I'll help you plan the entire product)
+1. Starting a new feature (single feature - I'll help you plan and create tasks)
+2. Using existing tasks (I'll set up Ralph to run your prd.json)
+3. Building a full product (multiple features - I'll help you plan the entire product)
 ```
 
 ---
 
-## Step 1: Understand the Feature
+## Step 1: Understand What You're Building
 
-Start by asking the user about their feature. Don't assume - ASK:
-
+### For Mode 1 (Single Feature):
 ```
 What feature are you building?
 ```
@@ -56,17 +54,30 @@ Then ask clarifying questions:
 - Are there any existing patterns to follow?
 - What should it look like when done?
 
-**Keep asking until you have enough detail to break it into tasks.**
+### For Mode 3 (Full Product):
+```
+What product are you building? Tell me about:
+- The core purpose / problem it solves
+- The main features you want
+- Any technical constraints (stack, existing code, etc.)
+```
+
+Then work through each feature:
+- What are the key user stories?
+- What's the MVP scope vs nice-to-have?
+- How do features relate to each other?
+
+**Keep asking until you have enough detail to break it into stories.**
 
 ---
 
-## Step 2: Break Into Tasks
+## Step 2: Break Into User Stories
 
-**Each task must be completable in ONE Ralph iteration (~one context window).**
+**Each story must be completable in ONE Ralph iteration (~one context window).**
 
-Ralph spawns a fresh Claude instance per iteration with no memory of previous work. If a task is too big, the LLM runs out of context before finishing.
+Ralph spawns a fresh Claude instance per iteration with no memory of previous work. If a story is too big, the LLM runs out of context before finishing.
 
-### Right-sized tasks:
+### Right-sized stories:
 - Add a database column + migration
 - Create a single UI component
 - Implement one server action
@@ -76,7 +87,7 @@ Ralph spawns a fresh Claude instance per iteration with no memory of previous wo
 ### Too big (split these):
 - "Build the entire dashboard" → Split into: schema, queries, components, filters
 - "Add authentication" → Split into: schema, middleware, login UI, session handling
-- "Refactor the API" → Split into one task per endpoint
+- "Refactor the API" → Split into one story per endpoint
 
 **Rule of thumb:** If you can't describe the change in 2-3 sentences, it's too big.
 
@@ -84,7 +95,7 @@ Ralph spawns a fresh Claude instance per iteration with no memory of previous wo
 
 ## Step 3: Order by Dependencies
 
-Tasks execute based on `dependsOn`. Earlier tasks must complete before dependent ones start.
+Stories execute in priority order. Earlier stories must complete before later ones can use their output.
 
 **Typical order:**
 1. Schema/database changes (migrations)
@@ -92,687 +103,433 @@ Tasks execute based on `dependsOn`. Earlier tasks must complete before dependent
 3. UI components that use the backend
 4. Integration / E2E tests
 
-Use `dependsOn` to express this:
+For Mode 3 (Full Product), chain features together:
 ```
-Task 1: Schema (no dependencies)
-Task 2: Server action (dependsOn: [task-1])
-Task 3: UI component (dependsOn: [task-2])
-Task 4: Tests (dependsOn: [task-3])
+Feature 1 stories (priority 1-4)
+Feature 2 stories (priority 5-8) - can depend on Feature 1
+Feature 3 stories (priority 9-12) - can depend on Features 1 & 2
 ```
-
-Parallel tasks that don't depend on each other can share the same dependency.
 
 ---
 
-## Step 4: Create Tasks
+## Step 4: Create prd.json
 
-### First, create the parent task:
+### Output Format:
 
+```json
+{
+  "project": "[Project Name]",
+  "branchName": "ralph/[feature-name-kebab-case]",
+  "description": "[Feature/Product description]",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "[Story title - action-oriented]",
+      "description": "As a [user], I want [feature] so that [benefit]",
+      "acceptanceCriteria": [
+        "Criterion 1 - specific and verifiable",
+        "Criterion 2",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
 ```
-task_list create
-  title: "[Feature Name]"
-  description: "[One-line description of the feature]"
-  repoURL: "https://github.com/snarktank/untangle"
-```
 
-**Save the returned task ID** - you'll need it for subtasks.
-
-### Then, create subtasks with parentID and dependsOn:
-
-```
-task_list create
-  title: "[Task title - action-oriented]"
-  description: "[Detailed description with:
-    - What to implement
-    - Files to create/modify
-    - Acceptance criteria
-    - How to verify (typecheck, tests, browser)]"
-  parentID: "<parent-task-id>"
-  dependsOn: ["<previous-task-id>"]  // omit for first task
-  repoURL: "https://github.com/snarktank/untangle"
-```
-
-### Task description format:
+### Story description format:
 
 Write descriptions that a future Ralph iteration can pick up without context:
 
 ```
-Implement category name to ID mapping for expenses.
+As a developer, I need to store task status in the database.
 
 **What to do:**
-- Create function mapExpenseCategoryNameToId(name, isChildExpense)
-- Query item_category table with category_type filter
-- Add alias mapping for common synonyms (rent → Rent or Mortgage)
+- Add status column to tasks table
+- Create migration with default value 'pending'
+- Update schema types
 
 **Files:**
-- workflows/tools/upsert-expense.ts
-
-**Acceptance criteria:**
-- Function returns category ID for valid names
-- Returns null for unknown categories
-- npm run typecheck passes
+- db/schema.ts
+- db/migrations/
 
 **Notes:**
-- Follow pattern from upsert-income.ts
-- EXPENSE type for family, CHILD_EXPENSE for child
+- Follow existing migration pattern
 ```
 
 ---
 
 ## Step 5: Set Up Ralph Files
 
-After creating all tasks, **run the shared setup steps from "Final Setup (Required for All Modes)" section.**
+After creating prd.json:
 
-This ensures:
-- Parent task ID is saved to `scripts/ralph/parent-task-id.txt`
-- Previous progress.txt is archived if it has content
-- Fresh progress.txt is created with Codebase Patterns preserved
+### 1. Check if previous run needs archiving:
+
+```bash
+cat prd.json 2>/dev/null | jq -r '.branchName'
+```
+
+If prd.json exists with a DIFFERENT branchName and progress.txt has content:
+```bash
+DATE=$(date +%Y-%m-%d)
+FEATURE="previous-feature-name"
+mkdir -p archive/$DATE-$FEATURE
+cp prd.json archive/$DATE-$FEATURE/
+cp progress.txt archive/$DATE-$FEATURE/
+```
+
+### 2. Write prd.json:
+
+Save the new prd.json to the ralph directory (or project root).
+
+### 3. Reset progress.txt:
+
+```bash
+cat > progress.txt << 'EOF'
+# Ralph Progress Log
+Started: [current date]
+Feature: [feature/product name]
+
+## Codebase Patterns
+(Patterns discovered during this build)
+
+---
+EOF
+```
 
 ---
 
 ## Step 6: Confirm Setup
 
-Show the user what was created:
+### For Mode 1 (Single Feature):
 
 ```
 ✅ Ralph is ready!
 
-**Parent task:** [title] (ID: [id])
+**Feature:** [name]
+**Branch:** ralph/[feature-name]
 
-**Subtasks:**
-1. [Task 1 title] - no dependencies
-2. [Task 2 title] - depends on #1
-3. [Task 3 title] - depends on #2
+**User Stories:**
+1. US-001: [title] - priority 1
+2. US-002: [title] - priority 2
+3. US-003: [title] - priority 3
 ...
 
 **To run Ralph:**
-```bash
-./scripts/ralph/ralph.sh [max_iterations]
-# or directly:
-npx tsx scripts/ralph/ralph.ts [max_iterations]
+./ralph.sh [max_iterations]
+
+Ralph will work through each story in priority order until all pass.
 ```
 
-**To check status:**
-```bash
-# Use your task management tool to list subtasks under [parent-id]
+### For Mode 3 (Full Product):
+
+```
+✅ Product plan created!
+
+**Product:** [name]
+**Branch:** ralph/[product-name]
+
+**Stories by feature:**
+
+Feature 1: [name]
+- US-001: [title] - priority 1
+- US-002: [title] - priority 2
+
+Feature 2: [name]
+- US-003: [title] - priority 3
+- US-004: [title] - priority 4
+
+...
+
+**Total:** [N] stories across [X] features
+
+**To run Ralph:**
+./ralph.sh [max_iterations]
+
+Ralph will work through ALL stories until the entire product is complete.
 ```
 
 ---
 
 ## Mode 2: Setting Up Existing Tasks
 
-If the user already has tasks created, help them set up Ralph to run them.
+If the user already has prd.json:
 
-### Find the parent task:
+### 1. Verify prd.json exists and is valid:
 
-Ask the user:
-```
-What's the parent task? You can give me:
-- The task ID directly
-- A search term and I'll find it
-- Or say "list recent" to see recent tasks
+```bash
+cat prd.json | jq '.userStories | length'
 ```
 
-To search for tasks (always use limit to avoid context overflow):
-```
-task_list list
-  repoURL: "https://github.com/snarktank/untangle"
-  limit: 10
-```
-
-### Verify subtasks exist:
-
-Once you have the parent ID, check for subtasks (always use limit):
-```
-task_list list
-  parentID: "<parent-task-id>"
-  limit: 10
-```
-
-If no subtasks found, the parent task might BE the work (not a container). Ask:
-```
-This task has no subtasks. Is this:
-1. A parent task with subtasks I should find differently?
-2. The actual work task (I should create it as a parent with this as the first subtask)?
-```
-
-### Check dependencies:
-
-Review the subtasks and verify:
-- Do they have `dependsOn` set correctly?
-- Are there any circular dependencies?
-- Is the first task(s) dependency-free so Ralph can start?
-
-If dependencies are missing, offer to fix:
-```
-These tasks don't have dependencies set. Should I:
-1. Add dependencies based on their order?
-2. Leave them parallel (Ralph picks any ready task)?
-```
-
-### Set up ralph files:
-
-**Run the shared setup steps from "Final Setup (Required for All Modes)" section below.**
-
-### Show status:
+### 2. Show current status:
 
 ```
-✅ Ralph is ready to use existing tasks!
+**Current Status:**
+- ✅ Passing: [N] stories
+- ❌ Not passing: [M] stories
 
-**Parent task:** [title] (ID: [id])
-
-**Status:**
-- ✅ Completed: 3 tasks
-- 🔄 Ready to work: 2 tasks
-- ⏳ Blocked: 5 tasks (waiting on dependencies)
-
-**Next task Ralph will pick:**
-[Task title] - [brief description]
+**Next story Ralph will work on:**
+US-XXX: [title]
 
 **To run Ralph:**
-```bash
-./scripts/ralph/ralph.sh [max_iterations]
-# or directly:
-npx tsx scripts/ralph/ralph.ts [max_iterations]
+./ralph.sh [max_iterations]
+```
+
+### 3. Fix issues if needed:
+
+If stories are missing acceptance criteria or are too big, offer to fix:
+```
+Some stories might need adjustment:
+- US-003 looks too big - want me to split it?
+- US-005 is missing "Typecheck passes" criterion - want me to add it?
 ```
 
 ---
 
-## Mode 3: Building a Full Product
+## Acceptance Criteria Requirements
 
-Mode 3 is **Mode 1 at product scale**. Same task sizing rules, same dependency system, same execution loop.
-
-**Assumes you already have a PRD** (use the `/prd` skill first if needed).
-
-### Step 1: Read the PRD
-
-Ask the user for the PRD location:
-```
-Where is your PRD? (e.g., /tasks/prd-my-product.md)
-```
-
-Read the PRD and extract:
-- User stories
-- Functional requirements
-- Technical considerations
-
-### Step 2: Break Into Tasks
-
-Convert the PRD's user stories and requirements into ralph-sized tasks.
-
-**Same sizing rules as Mode 1 apply.** Each task must be completable in ONE Ralph iteration.
-
-Group tasks by feature/user story and ensure proper ordering:
-- US-001 tasks first (schema, backend, UI, tests)
-- US-002 tasks next (depends on US-001 completion)
-- etc.
-
-### Step 3: Create Tasks with Dependencies
-
-Create a parent task for the product, then all tasks as children with proper `dependsOn`:
-
-```
-task_list create
-  title: "[Product Name]"
-  description: "Full product build: [one-line description]"
-  repoURL: "<repo-url>"
-```
-
-Then create all tasks with dependencies that ensure correct ordering:
-
-```
-task_list create
-  title: "[Task title]"
-  description: "[Detailed task description - same format as Mode 1]"
-  parentID: "<product-task-id>"
-  dependsOn: ["<previous-task-id>"]  // links features together
-  repoURL: "<repo-url>"
-```
-
-**Key:** The last task of US-001 should be in `dependsOn` for the first task of US-002. This chains user stories together naturally.
-
-### Step 4: Set Up Ralph Files
-
-Same as Mode 1 - save the product task ID to parent-task-id.txt and run the Final Setup steps.
-
-### Step 5: Confirm Product Setup
-
-Show the user the full plan:
-
-```
-✅ Product plan created from PRD!
-
-**Product:** [name] (ID: [product-id])
-
-**Tasks by user story:**
-
-US-001: [User story title]
-1. [Task 1] - no dependencies
-2. [Task 2] - depends on #1
-3. [Task 3] - depends on #2
-
-US-002: [User story title]
-4. [Task 4] - depends on #3 (chains to US-001)
-5. [Task 5] - depends on #4
-...
-
-**Total:** [N] tasks from [X] user stories
-
-**To run Ralph:**
-```bash
-./scripts/ralph/ralph.sh [max_iterations]
-```
-
-Ralph works through all tasks based on dependencies until the entire product is complete.
-```
-
-### Example: PRD → Tasks
-
-**PRD:** Task Priority System (from `/tasks/prd-task-priority.md`)
-
-**User Stories → Tasks:**
-
-US-001: Add priority field to database
-1. Add priority column to tasks table (no deps)
-
-US-002: Display priority indicator
-2. Create PriorityBadge component (depends: 1)
-3. Add badge to task cards (depends: 2)
-
-US-003: Add priority selector
-4. Add priority dropdown to task edit modal (depends: 3)
-
-US-004: Filter tasks by priority
-5. Add priority filter dropdown (depends: 4)
-6. Implement filter logic (depends: 5)
-7. Add URL param persistence (depends: 6)
-
-Ralph completes task 1, then 2, then 3... until task 7 is done and the product is complete
-
----
-
-## Final Setup (Required for All Modes)
-
-**ALWAYS run these steps after creating tasks OR setting up existing tasks:**
-
-### 1. Save parent task ID:
-
-```bash
-echo "<parent-task-id>" > scripts/ralph/parent-task-id.txt
-```
-
-Verify it was saved:
-```bash
-cat scripts/ralph/parent-task-id.txt
-```
-
-### 2. Check if progress.txt needs archiving:
-
-Read the current progress.txt:
-```bash
-cat scripts/ralph/progress.txt
-```
-
-**Archive if:**
-- It has content beyond the header (learnings from a previous feature)
-- The previous feature is different from the current one
-
-**Archive command:**
-```bash
-DATE=$(date +%Y-%m-%d)
-FEATURE="previous-feature-name-here"
-mkdir -p scripts/ralph/archive/$DATE-$FEATURE
-cp scripts/ralph/progress.txt scripts/ralph/archive/$DATE-$FEATURE/
-echo "Archived to scripts/ralph/archive/$DATE-$FEATURE/"
-```
-
-### 3. Reset progress.txt:
-
-**Preserve useful Codebase Patterns** from the previous run, then reset:
-
-```bash
-cat > scripts/ralph/progress.txt << 'EOF'
-# Ralph Progress Log
-Started: [current date]
-
-## Codebase Patterns
-[Copy any patterns from previous run that are still relevant]
----
-EOF
-```
-
-### 4. Verify setup is complete:
-
-```bash
-# Confirm parent ID is saved
-cat scripts/ralph/parent-task-id.txt
-
-# Confirm progress.txt is reset
-head -10 scripts/ralph/progress.txt
-
-# List subtasks to confirm they exist
-# (use task_list list with parentID)
-```
-
-**Only after completing all 4 steps is Ralph ready to run.**
-
----
-
-## Acceptance Criteria for Each Task
-
-Each task description MUST include verifiable acceptance criteria:
+Each story MUST include verifiable acceptance criteria:
 
 ### Good criteria (verifiable):
-- "Add `investorType` column to investor table with default 'cold'"
-- "Filter dropdown has options: All, Cold, Friend"
-- "npm run typecheck passes"
-- "npm test -- path/to/test.ts passes"
+- "Add `status` column to tasks table with default 'pending'"
+- "Filter dropdown has options: All, Active, Completed"
+- "Clicking delete shows confirmation dialog"
+- "Typecheck passes"
+- "Tests pass"
 
 ### Bad criteria (vague):
 - ❌ "Works correctly"
 - ❌ "Good UX"
 - ❌ "Handles edge cases"
 
-### Always include:
+### Always include as final criterion:
 ```
-npm run typecheck passes
-```
-
-### For tasks with testable logic:
-```
-npm test passes
+"Typecheck passes"
 ```
 
-### For UI/browser tasks:
+### For stories with testable logic:
+```
+"Tests pass"
+```
 
-**For functional testing** (checking behavior, not appearance):
+### For UI stories:
 ```
-Use Chrome DevTools MCP with take_snapshot to read page content (NOT screenshots)
-```
-- `take_snapshot` returns the a11y tree as text that Ralph can read and verify
-- `take_screenshot` returns images which Ralph cannot interpret for functional checks
-- Only use screenshots when testing visual appearance/look and feel
-
-**For visual testing** (checking appearance):
-```
-Use take_screenshot to capture and verify visual appearance
+"Verify in browser using dev-browser skill"
 ```
 
 ---
 
-## Example Conversation
+## Example: Mode 1 Conversation
 
-**User:** set up ralph for adding expense tracking to the legal agent
+**User:** set up ralph for adding a priority field to tasks
 
 **Assistant:** What feature are you building?
 
-**User:** I want Grace (our legal chat agent) to be able to create, update, and delete expenses when users mention them in conversation.
+**User:** I want to add priority levels (low, medium, high) to tasks so users can sort and filter by importance.
 
-**Assistant:** Got it - an expense upsert tool for the legal agent. A few questions:
+**Assistant:** Got it - task priority feature. A few questions:
 
-1. Are there existing tools in the legal agent I should follow as a pattern?
-2. Do expenses have different types (family vs child)?
-3. Should it also list expenses or just CRUD?
-4. Any task completion logic needed?
+1. Should priority be required or optional (with a default)?
+2. Where should the priority selector appear - task creation, edit, or both?
+3. Should the task list auto-sort by priority?
 
-**User:** Follow upsert-income.ts. Yes family and child expenses (different tables). Yes list too. Mark APP_EXPENSES_ENTERED task complete.
+**User:** Optional with default "medium". Show in both create and edit. Yes, sort by priority then by date.
 
-**Assistant:** Perfect. Here's my proposed breakdown:
+**Assistant:** Here's my proposed breakdown:
 
-1. **Create tool skeleton** - Zod schema, basic structure
-2. **Category mapping** - Map names like "rent" to category IDs
-3. **Amount parsing** - Handle currency formats, allow $0
-4. **Duplicate detection** - Check before creating
-5. **Create family expenses** - Insert into expense table
-6. **Create child expenses** - Insert into child_expense table
-7. **Update action** - Modify existing expenses
-8. **Delete action** - Remove expenses
-9. **List action** - Show all expenses with totals
-10. **Task completion** - Mark APP_EXPENSES_ENTERED done
-11. **Register tool** - Add to legal chat workflow
-12. **UI progress indicator** - Show progress during tool use
-13. **Unit tests** - Test helper functions
-14. **E2E tests** - Test via chat interface
+1. **US-001: Add priority column** - Schema change with migration
+2. **US-002: Display priority badge** - Visual indicator on task cards
+3. **US-003: Add priority selector** - Dropdown in create/edit forms
+4. **US-004: Sort by priority** - Update list query and UI
+5. **US-005: Filter by priority** - Add filter dropdown
 
-Does this look right? Any tasks to add or remove?
+Does this look right?
 
 **User:** Looks good, create the tasks
 
-**Assistant:** [Creates parent task, then subtasks with dependencies, saves parent-task-id.txt]
+**Assistant:** [Creates prd.json, resets progress.txt]
 
 ✅ Ralph is ready!
-
-**Parent task:** Legal Agent Expense Upsert Tool (ID: task-abc123)
-
-**Subtasks:** 14 tasks created with dependencies
-
-**To run:** `./scripts/ralph/ralph.sh 20`
+...
 
 ---
 
-## How Ralph Completes
+## Example: Mode 3 Conversation
 
-When all subtasks are completed:
-1. Ralph marks the **parent task** as `completed`
-2. Ralph outputs `<promise>COMPLETE</promise>`
-3. The ralph.sh/ralph.ts loop detects this and exits
+**User:** I want to build a simple habit tracker app
 
-**Important:** Ralph uses `limit: 5` when querying tasks to avoid context overflow. If you have many subtasks, they'll be processed over multiple iterations.
+**Assistant:** Tell me about the habit tracker:
+- What's the core goal?
+- What features do you want?
+- Any technical constraints?
+
+**User:** Users can create habits, mark them complete daily, and see streaks. Web app, React + Node.
+
+**Assistant:** Got it. Let me understand the scope:
+
+1. **Habits CRUD** - create, edit, delete habits
+2. **Daily tracking** - mark habits complete for today
+3. **Streaks** - show current streak and best streak
+4. **Dashboard** - overview of today's habits and progress
+
+Anything else? Authentication? Multiple users?
+
+**User:** No auth for MVP, just local. Maybe a simple stats page showing completion rate.
+
+**Assistant:** Here's the full breakdown:
+
+**Feature 1: Database & Schema (4 stories)**
+- US-001: Set up database with habits table
+- US-002: Add completions table (habit_id, date)
+- US-003: Add streak calculation logic
+- US-004: Add stats calculation helpers
+
+**Feature 2: Backend API (4 stories)**
+- US-005: Habits CRUD endpoints
+- US-006: Mark habit complete endpoint
+- US-007: Get today's habits with status
+- US-008: Get stats endpoint
+
+**Feature 3: Core UI (4 stories)**
+- US-009: Habit list component
+- US-010: Add/edit habit modal
+- US-011: Daily check-off UI
+- US-012: Streak display component
+
+**Feature 4: Dashboard & Stats (3 stories)**
+- US-013: Today's habits dashboard
+- US-014: Stats page with completion rate
+- US-015: Visual progress indicators
+
+Total: 15 stories. Should I create the prd.json?
+
+**User:** Yes, create it
+
+**Assistant:** [Creates prd.json with all 15 stories, properly ordered]
+
+✅ Product plan created!
+...
 
 ---
 
-## Checklist Before Creating Tasks
+## Checklist Before Creating prd.json
 
-- [ ] Chatted through feature to understand scope
-- [ ] Each task completable in one iteration (small enough)
-- [ ] Tasks ordered by dependency (schema → backend → UI → tests)
-- [ ] Every task has "npm run typecheck passes" in description
-- [ ] UI tasks have browser verification in description
-- [ ] Descriptions have enough detail for Ralph to implement without context
-- [ ] Parent task ID saved to scripts/ralph/parent-task-id.txt
-- [ ] Previous run archived if progress.txt had content
+- [ ] Chatted through feature(s) to understand scope
+- [ ] Each story completable in one iteration (small enough)
+- [ ] Stories ordered by dependency (schema → backend → UI)
+- [ ] Every story has "Typecheck passes" as criterion
+- [ ] UI stories have "Verify in browser using dev-browser skill" as criterion
+- [ ] Acceptance criteria are specific and verifiable
+- [ ] No story depends on a later story
+- [ ] Previous run archived if prd.json exists with different branchName
 
 ---
 
 # Phase 2: The Execution Loop
 
-Once setup is complete, Ralph runs the autonomous loop to implement tasks one by one.
+Once setup is complete, Ralph runs the autonomous loop to implement stories one by one.
 
 ---
 
 ## Loop Workflow
 
-### 0. Get the parent task ID
-
-First, read the parent task ID that scopes this feature:
+### 0. Read prd.json
 
 ```bash
-cat scripts/ralph/parent-task-id.txt
+cat prd.json
 ```
 
-If this file doesn't exist, ask the user which parent task to work on.
+Find the first story where `passes: false`, ordered by priority.
 
-**Check if this is a new feature:** Compare the parent task ID to the one in `scripts/ralph/progress.txt` header. If they differ (or progress.txt doesn't exist), this is a NEW feature - reset progress.txt:
+### 1. If no incomplete stories
 
-```markdown
-# Build Progress Log
-Started: [today's date]
-Feature: [parent task title]
+All stories have `passes: true`:
+1. Output `<promise>COMPLETE</promise>`
+2. Archive progress.txt
+3. Report "✅ Build complete - all stories finished!"
 
-## Codebase Patterns
-(Patterns discovered during this feature build)
+### 2. If incomplete stories exist
 
----
-```
+**Pick the next story:**
+- Find lowest priority number where `passes: false`
+- This ensures dependency order is respected
 
-This ensures each feature starts with a clean slate. Progress.txt is SHORT-TERM memory for the current feature only.
+**Execute the story:**
 
-### 1. Check for ready tasks (with nested hierarchy support)
+Implement the acceptance criteria, then:
 
-The task hierarchy may have multiple levels (parent → container → leaf tasks). Use this approach to find all descendant tasks:
-
-**Step 1: Get all tasks for the repo**
-```
-task_list action: "list", repoURL: "<repo-url>", ready: true, status: "open", limit: 10
-```
-
-**Important:** Always use `limit` (5-10) to avoid context overflow with many tasks.
-
-**Step 2: Build the descendant set**
-Starting from the parent task ID, collect all tasks that are descendants:
-1. Find tasks where `parentID` equals the parent task ID (direct children)
-2. For each child found, recursively find their children
-3. Continue until no more descendants are found
-
-**Step 3: Filter to workable tasks**
-From the descendant set, select tasks that are:
-- `ready: true` (all dependencies satisfied)
-- `status: "open"`
-- Leaf tasks (no children of their own) - these are the actual work items
-
-**CRITICAL:** Skip container tasks that exist only to group other tasks. A container task has other tasks with its ID as their `parentID`.
-
-### 2. If no ready tasks
-
-Check if all descendant tasks are completed:
-- Query `task_list list` with `repoURL: "<repo-url>"` (no ready filter)
-- Build the full descendant set (same recursive approach as step 1)
-- If all leaf tasks in the descendant set are `completed`:
-  1. Mark the parent task as `completed`
-  2. Archive progress.txt:
-     ```bash
-     DATE=$(date +%Y-%m-%d)
-     FEATURE="feature-name-here"
-     mkdir -p scripts/ralph/archive/$DATE-$FEATURE
-     mv scripts/ralph/progress.txt scripts/ralph/archive/$DATE-$FEATURE/
-     ```
-  3. Clear parent-task-id.txt: `echo "" > scripts/ralph/parent-task-id.txt`
-  4. Create fresh progress.txt with empty template
-  5. Commit: `git add scripts/ralph && git commit -m "chore: archive progress for [feature-name]"`
-  6. Stop and report "✅ Build complete - all tasks finished!"
-- If some are blocked: Report which tasks are blocked and why
-
-### 3. If ready tasks exist
-
-**Pick the next task:**
-- Prefer tasks related to what was just completed (same module/area, dependent work)
-- If no prior context, pick the first ready task
-
-**Execute the task:**
-
-Use the `handoff` tool with this goal:
-
-```
-Implement and verify task [task-id]: [task-title].
-
-[task-description]
-
-FIRST: Read scripts/ralph/progress.txt - check the "Codebase Patterns" section for important context from previous iterations.
-
-When complete:
-
-1. Run quality checks: `npm run typecheck` and `npm test`
-   - If either fails, FIX THE ISSUES and re-run until both pass
+1. Run quality checks: `npm run typecheck` (and tests if applicable)
+   - If fails, FIX THE ISSUES and re-run until passing
    - Do NOT proceed until quality checks pass
 
-2. Update AGENTS.md files if you learned something important:
-   - Check for AGENTS.md in directories where you edited files
-   - Add learnings that future developers/agents should know (patterns, gotchas, dependencies)
-   - This is LONG-TERM memory - things anyone editing this code should know
-   - Do NOT add task-specific details or temporary notes
+2. Update AGENTS.md if you learned something important:
+   - Add patterns, gotchas, conventions for future developers/iterations
 
-3. Update progress.txt (APPEND, never replace) - this is SHORT-TERM memory for the current feature:
+3. Update progress.txt (APPEND):
    ```
-   ## [Date] - [Task Title]
-   Thread: [current thread URL]
-   Task ID: [task-id]
+   ## [Date] - US-XXX: [Story Title]
    - What was implemented
    - Files changed
-   - **Learnings for future iterations:**
-     - Patterns discovered
-     - Gotchas encountered
-     - Useful context
+   - Learnings for future iterations
    ---
    ```
 
-4. If you discovered a reusable pattern for THIS FEATURE, add it to the `## Codebase Patterns` section at the TOP of progress.txt
+4. Commit changes: `git add . && git commit -m "feat: [Story Title]"`
 
-5. Commit all changes with message: `feat: [Task Title]`
+5. Update prd.json: Set `passes: true` for this story, add notes if relevant
 
-6. Mark task as completed: `task_list action: "update", taskID: "[task-id]", status: "completed"`
-
-7. Invoke the ralph skill to continue the loop
-```
+6. Continue to next story (or exit if all complete)
 
 ---
 
 ## Progress File Format
 
 ```markdown
-# Build Progress Log
+# Ralph Progress Log
 Started: [date]
-Feature: [feature name]
-Parent Task: [parent-task-id]
+Feature: [feature/product name]
 
 ## Codebase Patterns
-(Patterns discovered during this feature build)
+(Patterns discovered during this build - useful for remaining stories)
 
 ---
 
-## [Date] - [Task Title]
-Thread: [current session reference]
-Task ID: [id]
+## [Date] - US-001: [Story Title]
 - What was implemented
 - Files changed
-- **Learnings for future iterations:**
-  - Patterns discovered
-  - Gotchas encountered
+- Learnings for future iterations
+---
+
+## [Date] - US-002: [Story Title]
+- What was implemented
+- Files changed
 ---
 ```
-
-**Note:** When a new feature starts with a different parent task ID, reset progress.txt completely. Long-term learnings belong in AGENTS.md files, not progress.txt.
-
----
-
-## Task Discovery
-
-While working, **liberally create new tasks** when you discover:
-- Failing tests or test gaps
-- Code that needs refactoring
-- Missing error handling
-- Documentation gaps
-- TODOs or FIXMEs in the code
-- Build/lint warnings
-- Performance issues
-
-Use `task_list action: "create"` immediately. Set appropriate `dependsOn` relationships.
 
 ---
 
 ## Browser Verification
 
-For UI tasks, specify the right verification method:
+For UI stories, use the dev-browser skill:
 
-**Functional testing** (checking behavior, not appearance):
-```
-Use Chrome DevTools MCP with take_snapshot to read page content
-```
-- `take_snapshot` returns the a11y tree as text that can be read and verified
-- Use for: button exists, text appears, form works
+**Functional testing** (checking behavior):
+- Navigate to the page
+- Interact with elements
+- Verify expected behavior
 
 **Visual testing** (checking appearance):
-```
-Use take_screenshot to capture and verify visual appearance
-```
-- Use for: layout, colors, styling, animations
+- Take screenshots
+- Verify layout and styling
 
 ---
 
 ## Quality Requirements
 
-Before marking any task complete:
-- `npm run typecheck` must pass
-- `npm test` must pass
+Before marking any story as `passes: true`:
+- Typecheck must pass
+- Tests must pass (if applicable)
 - Changes must be committed
 - Progress must be logged
 
@@ -780,17 +537,17 @@ Before marking any task complete:
 
 ## Stop Condition
 
-When no ready tasks remain AND all tasks are completed:
-1. Output: "✅ Build complete - all tasks finished!"
-2. Summarize what was accomplished
+When all stories have `passes: true`:
+1. Output: `<promise>COMPLETE</promise>`
+2. Ralph.sh detects this and exits the loop
+3. Feature/product is complete!
 
 ---
 
 ## Important Notes
 
-- Always use `ready: true` when listing tasks to only get tasks with satisfied dependencies
-- Always use `limit: 5-10` when listing tasks to avoid context overflow
-- Each handoff runs in a fresh thread with clean context
-- Progress.txt is the memory between iterations - keep it updated
-- Prefer tasks in the same area as just-completed work for better context continuity
-- The handoff goal MUST include instructions to update progress.txt, commit, and re-invoke this skill
+- Each iteration runs in a fresh Claude instance with clean context
+- prd.json is the source of truth for what's done
+- progress.txt provides context between iterations
+- Stories execute in priority order - respect the dependencies
+- Keep stories small enough to complete in one context window
