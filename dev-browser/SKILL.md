@@ -15,48 +15,54 @@ Browser automation that maintains page state across script executions. Write sma
 
 ## Setup
 
-**IMPORTANT: Always use Standalone Mode for browser automation.** Extension Mode is rarely needed.
+Two modes available. Ask the user if unclear which to use.
 
 ### Standalone Mode (Default)
 
-Launches a Chromium browser with a **persistent profile**. Login sessions, cookies, and local storage persist across browser restarts.
-
-**Start the server:**
+Launches a new Chromium browser for fresh automation sessions.
 
 ```bash
-~/.claude/skills/dev-browser/server.sh &
+./skills/dev-browser/server.sh &
 ```
 
-Wait for the `Ready` message before running scripts. Add `--headless` flag if user requests headless mode.
+Add `--headless` flag if user requests it. **Wait for the `Ready` message before running scripts.**
 
-**Key points:**
-- Profile stored at `~/.claude/skills/dev-browser/profiles/browser-data`
-- Once logged in, future sessions remain authenticated
-- Use this mode for local dev testing with auth (localhost:3000, etc.)
+### Extension Mode
 
-### Extension Mode (Rarely Used)
+Connects to user's existing Chrome browser. Use this when:
 
-Connects to user's existing Chrome browser. **Only use when explicitly requested** - the user must install a browser extension.
+- The user is already logged into sites and wants you to do things behind an authed experience that isn't local dev.
+- The user asks you to use the extension
+
+**Important**: The core flow is still the same. You create named pages inside of their browser.
+
+**Start the relay server:**
 
 ```bash
-cd ~/.claude/skills/dev-browser && npm i && npm run start-extension &
+cd skills/dev-browser && npm i && npm run start-extension &
 ```
 
-Download link: https://github.com/SawyerHood/dev-browser/releases
+Wait for `Waiting for extension to connect...` followed by `Extension connected` in the console. To know that a client has connected and the browser is ready to be controlled.
+**Workflow:**
+
+1. Scripts call `client.page("name")` just like the normal mode to create new pages / connect to existing ones.
+2. Automation runs on the user's actual browser session
+
+If the extension hasn't connected yet, tell the user to launch and activate it. Download link: https://github.com/SawyerHood/dev-browser/releases
 
 ## Writing Scripts
 
-> **Run all scripts from the dev-browser directory.** The `@/` import alias requires this directory's config.
+> **Run all scripts from `skills/dev-browser/` directory.** The `@/` import alias requires this directory's config.
 
 Execute scripts inline using heredocs:
 
 ```bash
-cd ~/.claude/skills/dev-browser && npx tsx <<'EOF'
+cd skills/dev-browser && npx tsx <<'EOF'
 import { connect, waitForPageLoad } from "@/client.js";
 
 const client = await connect();
-const page = await client.page("example"); // descriptive name like "cnn-homepage"
-await page.setViewportSize({ width: 1280, height: 800 });
+// Create page with custom viewport size (optional)
+const page = await client.page("example", { viewport: { width: 1920, height: 1080 } });
 
 await page.goto("https://example.com");
 await waitForPageLoad(page);
@@ -111,7 +117,11 @@ For scraping large datasets, intercept and replay network requests rather than s
 
 ```typescript
 const client = await connect();
-const page = await client.page("name"); // Get or create named page
+
+// Get or create named page (viewport only applies to new pages)
+const page = await client.page("name");
+const pageWithSize = await client.page("name", { viewport: { width: 1920, height: 1080 } });
+
 const pages = await client.list(); // List all page names
 await client.close("name"); // Close a page
 await client.disconnect(); // Disconnect (pages persist)
@@ -119,70 +129,9 @@ await client.disconnect(); // Disconnect (pages persist)
 // ARIA Snapshot methods
 const snapshot = await client.getAISnapshot("name"); // Get accessibility tree
 const element = await client.selectSnapshotRef("name", "e5"); // Get element by ref
-
-// Token-efficient content extraction (NEW)
-const outline = await client.getOutline("name"); // Tree of all elements
-const interactive = await client.getInteractiveOutline("name"); // Only interactive elements
-const text = await client.getVisibleText("name"); // Visible text only
 ```
 
 The `page` object is a standard Playwright Page.
-
-### Token-Efficient Content Extraction
-
-These methods provide structured, concise output that uses far fewer tokens than screenshots or full ARIA snapshots:
-
-**`getOutline(name, options?)`** - Returns a tree structure of DOM elements:
-```typescript
-const outline = await client.getOutline("mypage", { maxDepth: 4 });
-// Output:
-// body
-//   header#main-header
-//     nav [role=navigation]
-//       a "Home" [href=/]
-//       a "Products" [href=/products]
-//   main
-//     div.product-list ... (24)
-```
-- Shows tag names, IDs, classes, and relevant attributes
-- Collapses repeated siblings (shows `(×5)` instead of repeating)
-- Limits depth to reduce noise (default: 6)
-- Options: `{ selector?: string, maxDepth?: number }`
-
-**`getInteractiveOutline(name, selector?)`** - Returns only interactive elements and landmarks:
-```typescript
-const interactive = await client.getInteractiveOutline("mypage");
-// Output:
-// header
-//   a "Home" [href=/]
-//   a "Products" [href=/products]
-// main
-//   button "Add to Cart"
-//   input [type=text] [placeholder="Search"]
-// footer
-//   a "Contact" [href=/contact]
-```
-- Best for understanding available actions
-- Automatically prunes non-interactive containers
-- Shows landmarks (header, nav, main, footer, form, etc.)
-
-**`getVisibleText(name, options?)`** - Returns only visible text, filtering hidden elements:
-```typescript
-const text = await client.getVisibleText("mypage", { limit: 5000 });
-```
-- Excludes `display: none`, `visibility: hidden`, `opacity: 0`
-- Respects parent visibility (hidden parent = hidden children)
-- Preserves block structure with newlines
-- Options: `{ selector?: string, limit?: number }`
-
-**When to use which:**
-| Method | Use case | Token efficiency |
-|--------|----------|------------------|
-| `getInteractiveOutline()` | Discover clickable elements | Most efficient |
-| `getOutline()` | Understand page structure | Very efficient |
-| `getVisibleText()` | Extract readable content | Very efficient |
-| `getAISnapshot()` | Need ref-based clicking | Full ARIA tree |
-| `screenshot()` | Visual debugging | Uses vision tokens |
 
 ## Waiting
 
@@ -244,7 +193,7 @@ await element.click();
 Page state persists after failures. Debug with:
 
 ```bash
-cd ~/.claude/skills/dev-browser && npx tsx <<'EOF'
+cd skills/dev-browser && npx tsx <<'EOF'
 import { connect } from "@/client.js";
 
 const client = await connect();

@@ -31,11 +31,12 @@ mkdir -p scripts/ralph
 cat > scripts/ralph/ralph.sh << 'RALPH_SCRIPT'
 #!/bin/bash
 # Ralph - Long-running AI agent loop
-# Usage: ./ralph.sh [max_iterations]
+# Usage: ./ralph.sh [max_iterations_per_story]
+# Each user story gets up to max_iterations_per_story attempts to pass
 
 set -e
 
-MAX_ITERATIONS=${1:-10}
+MAX_ITERATIONS_PER_STORY=${1:-20}
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PRD_FILE="$SCRIPT_DIR/prd.json"
 PROGRESS_FILE="$SCRIPT_DIR/progress.txt"
@@ -79,31 +80,101 @@ if [ ! -f "$PROGRESS_FILE" ]; then
   echo "---" >> "$PROGRESS_FILE"
 fi
 
-echo "Starting Ralph - Max iterations: $MAX_ITERATIONS"
+echo "Starting Ralph - Max iterations per story: $MAX_ITERATIONS_PER_STORY"
+echo ""
 
-for i in $(seq 1 $MAX_ITERATIONS); do
-  echo ""
-  echo "═══════════════════════════════════════════════════════"
-  echo "  Ralph Iteration $i of $MAX_ITERATIONS"
-  echo "═══════════════════════════════════════════════════════"
+# Get total number of stories
+TOTAL_STORIES=$(jq '.userStories | length' "$PRD_FILE")
+COMPLETED_STORIES=0
+FAILED_STORIES=0
+TOTAL_ITERATIONS=0
 
-  OUTPUT=$(cat "$SCRIPT_DIR/prompt.md" | claude --dangerously-skip-permissions 2>&1 | tee /dev/stderr) || true
+# Process each story
+while true; do
+  # Find the next story that hasn't passed
+  NEXT_STORY=$(jq -r '.userStories | map(select(.passes == false)) | sort_by(.priority) | .[0].id // empty' "$PRD_FILE")
 
-  if echo "$OUTPUT" | grep -q "<promise>COMPLETE</promise>"; then
+  if [ -z "$NEXT_STORY" ]; then
     echo ""
-    echo "Ralph completed all tasks!"
-    echo "Completed at iteration $i of $MAX_ITERATIONS"
+    echo "════════════════════════════════════════════════════════════"
+    echo "  ALL STORIES COMPLETE!"
+    echo "════════════════════════════════════════════════════════════"
+    echo "  Total iterations: $TOTAL_ITERATIONS"
+    echo "  Completed stories: $COMPLETED_STORIES"
+    echo "  Failed stories: $FAILED_STORIES"
+    echo ""
     exit 0
   fi
 
-  echo "Iteration $i complete. Continuing..."
-  sleep 2
+  STORY_TITLE=$(jq -r --arg id "$NEXT_STORY" '.userStories[] | select(.id == $id) | .title' "$PRD_FILE")
+
+  echo ""
+  echo "════════════════════════════════════════════════════════════"
+  echo "  Working on: $NEXT_STORY - $STORY_TITLE"
+  echo "  (up to $MAX_ITERATIONS_PER_STORY iterations)"
+  echo "════════════════════════════════════════════════════════════"
+
+  STORY_ITERATION=0
+  STORY_PASSED=false
+
+  while [ $STORY_ITERATION -lt $MAX_ITERATIONS_PER_STORY ]; do
+    STORY_ITERATION=$((STORY_ITERATION + 1))
+    TOTAL_ITERATIONS=$((TOTAL_ITERATIONS + 1))
+
+    echo ""
+    echo "───────────────────────────────────────────────────────────"
+    echo "  $NEXT_STORY - Iteration $STORY_ITERATION of $MAX_ITERATIONS_PER_STORY"
+    echo "───────────────────────────────────────────────────────────"
+
+    # Run Claude on this story
+    OUTPUT=$(cat "$SCRIPT_DIR/prompt.md" | claude --dangerously-skip-permissions 2>&1 | tee /dev/stderr) || true
+
+    # Check if the story passed
+    STORY_STATUS=$(jq -r --arg id "$NEXT_STORY" '.userStories[] | select(.id == $id) | .passes' "$PRD_FILE")
+
+    if [ "$STORY_STATUS" = "true" ]; then
+      echo ""
+      echo "  ✅ $NEXT_STORY PASSED on iteration $STORY_ITERATION"
+      STORY_PASSED=true
+      COMPLETED_STORIES=$((COMPLETED_STORIES + 1))
+      break
+    fi
+
+    if echo "$OUTPUT" | grep -q "<promise>COMPLETE</promise>"; then
+      echo ""
+      echo "  ✅ All stories complete!"
+      exit 0
+    fi
+
+    echo "  Story not yet passing, continuing..."
+    sleep 2
+  done
+
+  if [ "$STORY_PASSED" = "false" ]; then
+    echo ""
+    echo "════════════════════════════════════════════════════════════"
+    echo "  ❌ $NEXT_STORY FAILED after $MAX_ITERATIONS_PER_STORY iterations"
+    echo "════════════════════════════════════════════════════════════"
+    echo ""
+    echo "  Story: $STORY_TITLE"
+    echo "  Attempts: $MAX_ITERATIONS_PER_STORY"
+    echo ""
+    echo "  Ralph needs your help to continue."
+    echo "  Please review the story and either:"
+    echo "    1. Fix the issue manually and re-run Ralph"
+    echo "    2. Simplify the acceptance criteria in prd.json"
+    echo "    3. Split this story into smaller stories"
+    echo ""
+    echo "  Progress so far: $COMPLETED_STORIES stories completed, $TOTAL_ITERATIONS total iterations"
+    echo ""
+    exit 1
+  fi
 done
 
 echo ""
-echo "Ralph reached max iterations ($MAX_ITERATIONS) without completing all tasks."
-echo "Check $PROGRESS_FILE for status."
-exit 1
+echo "Ralph finished."
+echo "Total iterations: $TOTAL_ITERATIONS"
+echo "Completed: $COMPLETED_STORIES, Failed: $FAILED_STORIES"
 RALPH_SCRIPT
 
 chmod +x scripts/ralph/ralph.sh
@@ -125,12 +196,15 @@ You are an autonomous coding agent working on a software project.
 4. Pick the **highest priority** user story where `passes: false`
 5. Implement that single user story
 6. Run quality checks (e.g., typecheck, lint, test - use whatever your project requires)
-7. Update AGENTS.md files if you discover reusable patterns (see below)
+7. **REQUIRED: Create or update AGENTS.md files** (see below - this is NOT optional)
 8. If checks pass, commit ALL changes with message: `feat: [Story ID] - [Story Title]`
 9. Update the PRD to set `passes: true` for the completed story
 10. Append your progress to `progress.txt`
 
-## Progress Report Format
+## Progress Report Format (progress.txt)
+
+**progress.txt is a SESSION LOG** - temporary notes for continuing work on THIS feature.
+It gets archived when you switch to a new feature.
 
 APPEND to progress.txt (never replace, always append):
 ```
@@ -145,7 +219,10 @@ Session: [current session reference]
 ---
 ```
 
-The learnings section is critical - it helps future iterations avoid repeating mistakes.
+The learnings section helps future iterations of THIS feature avoid repeating mistakes.
+
+**NOTE:** If a learning is GENERAL and applies to the whole codebase (not just this feature),
+put it in AGENTS.md instead! progress.txt is for feature-specific context.
 
 ## Consolidate Patterns
 
@@ -159,19 +236,40 @@ If you discover a **reusable pattern**, add it to the `## Codebase Patterns` sec
 
 Only add patterns that are **general and reusable**, not story-specific details.
 
-## Update AGENTS.md Files
+## REQUIRED: Create/Update AGENTS.md Files
 
-Before committing, check if edited files have learnings worth preserving in nearby AGENTS.md files:
+**AGENTS.md is PERMANENT DOCUMENTATION** - it stays with the codebase forever and helps ANY future developer/agent understand patterns and conventions. Unlike progress.txt (which is feature-specific and gets archived), AGENTS.md is the long-term knowledge base.
 
-1. Identify directories with edited files
-2. Check for existing AGENTS.md in those directories
-3. Add valuable learnings future developers/agents should know
+**This step is MANDATORY for every story.** Before committing, you MUST create or update AGENTS.md files.
 
-**Good AGENTS.md additions:**
-- "When modifying X, also update Y to keep them in sync"
-- "This module uses pattern Z for all API calls"
+### First Story Only - Create Root AGENTS.md
+If `AGENTS.md` doesn't exist in the project root, create it with:
+- Project overview and tech stack
+- Key patterns and conventions
+- Design system reference (if applicable)
+- Common gotchas
 
-**Do NOT add:** Story-specific details, temporary notes, info already in progress.txt
+### Every Story - Update Relevant AGENTS.md
+1. Identify directories where you edited/created files
+2. Create `AGENTS.md` in that directory if it doesn't exist
+3. Add learnings that would help future developers/agents
+
+### What to Include in AGENTS.md
+**DO include:**
+- Import patterns: "Import colors from `@/constants` using `import { Colors } from '@/constants'`"
+- Component patterns: "Cards use `Colors.card` background with 16px border radius"
+- Gotchas: "Font family names must match exactly: `Montserrat_500Medium`"
+- Sync requirements: "When modifying X, also update Y"
+
+**Do NOT include:**
+- Story-specific implementation details
+- Temporary notes or TODOs
+- Info already in progress.txt
+
+### Required AGENTS.md Locations
+At minimum, create AGENTS.md in:
+- Project root (`/AGENTS.md`) - on first story
+- Any directory where you create 2+ files
 
 ## Quality Requirements
 
@@ -567,13 +665,19 @@ After setup is complete:
 ./scripts/ralph/ralph.sh 20
 ```
 
+The argument is **max iterations PER STORY** (default: 20). Each story gets up to 20 attempts to pass before Ralph moves on.
+
 Ralph will:
-1. Read prd.json, find next `passes: false` story
-2. Implement it
-3. Run quality checks
-4. Commit if passing
-5. Set `passes: true`
+1. Find the next `passes: false` story (by priority)
+2. Try up to N iterations to implement it
+3. Run quality checks each iteration
+4. Create/update AGENTS.md files
+5. Commit if passing, set `passes: true`
 6. Log to progress.txt
-7. Repeat until all done or max iterations
+7. Move to next story
+8. Repeat until all stories pass
+
+**If a story fails after max iterations, Ralph STOPS and asks for help.**
+This lets you review the issue and decide how to proceed (fix manually, simplify criteria, or split the story).
 
 When all stories pass, Ralph outputs `<promise>COMPLETE</promise>` and exits.
