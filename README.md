@@ -28,6 +28,7 @@ A collection of custom skills for Claude Code.
 | **threejs-textures** | Three.js textures - texture types, UV mapping, environment maps, texture settings |
 | **upgrade-stripe** | Guide for upgrading Stripe API versions and SDKs |
 | **vercel-react-best-practices** | React and Next.js performance optimization guidelines from Vercel Engineering |
+| **visual-test** | Visual component testing for web, mobile, and desktop apps - spins up browsers/simulators, tests every page/screen, reports bugs and fixes |
 | **web-design-guidelines** | Review UI code for Web Interface Guidelines compliance and accessibility |
 
 ## Installation
@@ -52,3 +53,4 @@ Each skill can be invoked by its trigger phrases. For example:
 - Working with Three.js - Use the relevant threejs-* skill
 - Stripe integration or upgrades - Use stripe-best-practices or upgrade-stripe
 - React/Next.js performance - Use vercel-react-best-practices
+- `/visual-test` or "test the app" or "find bugs" - Visual test all components across browsers and simulators
